@@ -5,7 +5,7 @@ import {
   Monitor,
 //   Terminal,
   Package,
-//   MonitorSmartphone,
+  MonitorSmartphone,
   Cpu,
   Copy,
   Check,
@@ -29,156 +29,208 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:808
 
 // Agent packages data
 const agentPackages = [
-  {
-    id: 'debian-amd64',
-    name: 'vsay-agent-amd64.deb',
-    os: 'Debian/Ubuntu',
-    osIcon: 'https://www.debian.org/logos/openlogo-nd.svg',
-    arch: 'AMD64',
-    archIcon: <Cpu />,
-    downloadUrl: `${BACKEND_URL}/agent/download/vsay-agent-amd64.deb`,
-  },
-  {
-    id: 'debian-arm64',
-    name: 'vsay-agent-arm64.deb',
-    os: 'Debian/Ubuntu',
-    osIcon: 'https://www.debian.org/logos/openlogo-nd.svg',
-    arch: 'ARM64',
-    archIcon: <Cpu />,
-    downloadUrl: `${BACKEND_URL}/agent/download/vsay-agent-arm64.deb`,
-  },
-  {
-    id: 'rocky-x86_64',
-    name: 'vsay-agent-x86_64.tar.gz',
-    os: 'Rocky/CentOS/RHEL',
-    osIcon: 'https://www.svgrepo.com/show/354273/redhat-icon.svg',
-    arch: 'x86_64',
-    archIcon: <Cpu />,
-    downloadUrl: `${BACKEND_URL}/agent/download/vsay-agent-x86_64.tar.gz`,
-  },
-  {
-    id: 'rocky-aarch64',
-    name: 'vsay-agent-aarch64.tar.gz',
-    os: 'Rocky/CentOS/RHEL',
-    osIcon: 'https://www.svgrepo.com/show/354273/redhat-icon.svg',
-    arch: 'aarch64',
-    archIcon: <Cpu />,
-    downloadUrl: `${BACKEND_URL}/agent/download/vsay-agent-aarch64.tar.gz`,
-  },
-  {
-    id: 'macos-amd64',
-    name: 'vsay-agent-amd64.dmg',
-    os: 'macOS',
-    osIcon: 'https://www.svgrepo.com/show/503173/apple-logo.svg',
-    arch: 'Intel (AMD64)',
-    archIcon: <Cpu />,
-    downloadUrl: `${BACKEND_URL}/agent/download/vsay-agent-amd64.dmg`,
-  },
-  {
-    id: 'macos-arm64',
-    name: 'vsay-agent-arm64.dmg',
-    os: 'macOS',
-    osIcon: 'https://www.svgrepo.com/show/503173/apple-logo.svg',
-    arch: 'Apple Silicon (ARM64)',
-    archIcon: <Cpu />,
-    downloadUrl: `${BACKEND_URL}/agent/download/vsay-agent-arm64.dmg`,
-  },
-  {
-    id: 'windows-amd64',
-    name: 'vsay-agent-amd64.exe',
-    os: 'Windows',
-    osIcon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Windows_logo_-_2021.svg/960px-Windows_logo_-_2021.svg.png',
-    arch: 'AMD64',
-    archIcon: <Cpu />,
-    downloadUrl: `${BACKEND_URL}/agent/download/vsay-agent-amd64.exe`,
-  },
-  {
-    id: 'windows-arm64',
-    name: 'vsay-agent-arm64.exe',
-    os: 'Windows',
-    osIcon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Windows_logo_-_2021.svg/960px-Windows_logo_-_2021.svg.png',
-    arch: 'ARM64',
-    archIcon: <Cpu />,
-    downloadUrl: `${BACKEND_URL}/agent/download/vsay-agent-arm64.exe`,
-  },
-];
-
-// // CLI packages data — filenames are FIXED (no version/commit embedded), so
-// // this list never needs to change across releases. `make deploy-binaries
-// // VERSION=x.y.z` in vsay-shell-cli always (re)writes these same names into
-// // public/downloads/, so "latest" is always at a stable URL.
-// const cliPackages = [
+  // EPM: Linux/RHEL disabled — EPM targets Windows and macOS only; re-enable later
 //   {
-//     id: 'cli-debian-amd64',
-//     name: 'vsay-shell-cli-amd64.deb',
+//     id: 'debian-amd64',
+//     name: 'wxt-agent-amd64.deb',
 //     os: 'Debian/Ubuntu',
 //     osIcon: 'https://www.debian.org/logos/openlogo-nd.svg',
 //     arch: 'AMD64',
 //     archIcon: <Cpu />,
-//     downloadUrl: '/downloads/vsay-shell-cli-amd64.deb',
+//     downloadUrl: `${BACKEND_URL}/agent/download/wxt-agent-amd64.deb`,
 //   },
 //   {
-//     id: 'cli-debian-arm64',
-//     name: 'vsay-shell-cli-arm64.deb',
+//     id: 'debian-arm64',
+//     name: 'wxt-agent-arm64.deb',
 //     os: 'Debian/Ubuntu',
 //     osIcon: 'https://www.debian.org/logos/openlogo-nd.svg',
 //     arch: 'ARM64',
 //     archIcon: <Cpu />,
-//     downloadUrl: '/downloads/vsay-shell-cli-arm64.deb',
+//     downloadUrl: `${BACKEND_URL}/agent/download/wxt-agent-arm64.deb`,
 //   },
 //   {
-//     id: 'cli-rocky-x86_64',
-//     name: 'vsay-shell-cli-x86_64.rpm',
+//     id: 'rocky-x86_64',
+//     name: 'wxt-agent-x86_64.tar.gz',
 //     os: 'Rocky/CentOS/RHEL',
 //     osIcon: 'https://www.svgrepo.com/show/354273/redhat-icon.svg',
 //     arch: 'x86_64',
 //     archIcon: <Cpu />,
-//     downloadUrl: '/downloads/vsay-shell-cli-x86_64.rpm',
+//     downloadUrl: `${BACKEND_URL}/agent/download/wxt-agent-x86_64.tar.gz`,
 //   },
 //   {
-//     id: 'cli-rocky-aarch64',
-//     name: 'vsay-shell-cli-aarch64.rpm',
+//     id: 'rocky-aarch64',
+//     name: 'wxt-agent-aarch64.tar.gz',
 //     os: 'Rocky/CentOS/RHEL',
 //     osIcon: 'https://www.svgrepo.com/show/354273/redhat-icon.svg',
 //     arch: 'aarch64',
 //     archIcon: <Cpu />,
-//     downloadUrl: '/downloads/vsay-shell-cli-aarch64.rpm',
+//     downloadUrl: `${BACKEND_URL}/agent/download/wxt-agent-aarch64.tar.gz`,
 //   },
+  {
+    id: 'macos-amd64',
+    name: 'wxt-agent-amd64.dmg',
+    os: 'macOS',
+    osIcon: 'https://www.svgrepo.com/show/503173/apple-logo.svg',
+    arch: 'Intel (AMD64)',
+    archIcon: <Cpu />,
+    downloadUrl: `${BACKEND_URL}/agent/download/wxt-agent-amd64.dmg`,
+  },
+  {
+    id: 'macos-arm64',
+    name: 'wxt-agent-arm64.dmg',
+    os: 'macOS',
+    osIcon: 'https://www.svgrepo.com/show/503173/apple-logo.svg',
+    arch: 'Apple Silicon (ARM64)',
+    archIcon: <Cpu />,
+    downloadUrl: `${BACKEND_URL}/agent/download/wxt-agent-arm64.dmg`,
+  },
+  {
+    id: 'windows-amd64',
+    name: 'wxt-agent-amd64.exe',
+    os: 'Windows',
+    osIcon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Windows_logo_-_2021.svg/960px-Windows_logo_-_2021.svg.png',
+    arch: 'AMD64',
+    archIcon: <Cpu />,
+    downloadUrl: `${BACKEND_URL}/agent/download/wxt-agent-amd64.exe`,
+  },
+  {
+    id: 'windows-arm64',
+    name: 'wxt-agent-arm64.exe',
+    os: 'Windows',
+    osIcon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Windows_logo_-_2021.svg/960px-Windows_logo_-_2021.svg.png',
+    arch: 'ARM64',
+    archIcon: <Cpu />,
+    downloadUrl: `${BACKEND_URL}/agent/download/wxt-agent-arm64.exe`,
+  },
+];
+
+// EPM: the session helper is now bundled inside the agent, so it needs no separate download; re-enable this if that ever changes
+// // Session-helper packages.
+// //
+// // Remote control needs TWO binaries on the machine: the agent daemon and this
+// // helper, which runs inside the logged-in user's desktop because a Windows
+// // service (session 0) and a macOS LaunchDaemon can do neither screen capture
+// // nor show the consent prompt. The helper is also bundled inside the .dmg and
+// // the Windows .zip installer — these standalone downloads exist so a curl
+// // install can fetch the pair straight into one directory.
+// //
+// // Linux is absent on purpose: those machines are managed through the terminal
+// // and have no desktop to take over.
+// const sessionHelperPackages = [
 //   {
-//     id: 'cli-macos-amd64',
-//     name: 'vsay-shell-cli-amd64.dmg',
-//     os: 'macOS',
-//     osIcon: 'https://www.svgrepo.com/show/503173/apple-logo.svg',
-//     arch: 'Intel (AMD64)',
-//     archIcon: <Cpu />,
-//     downloadUrl: '/downloads/vsay-shell-cli-amd64.dmg',
-//   },
-//   {
-//     id: 'cli-macos-arm64',
-//     name: 'vsay-shell-cli-arm64.dmg',
-//     os: 'macOS',
-//     osIcon: 'https://www.svgrepo.com/show/503173/apple-logo.svg',
-//     arch: 'Apple Silicon (ARM64)',
-//     archIcon: <Cpu />,
-//     downloadUrl: '/downloads/vsay-shell-cli-arm64.dmg',
-//   },
-//   {
-//     id: 'cli-windows-amd64',
-//     name: 'vsay-shell-cli-amd64.exe',
+//     id: 'helper-windows-amd64',
+//     name: 'wxt-agent-session-amd64.exe',
 //     os: 'Windows',
 //     osIcon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Windows_logo_-_2021.svg/960px-Windows_logo_-_2021.svg.png',
 //     arch: 'AMD64',
 //     archIcon: <Cpu />,
-//     downloadUrl: '/downloads/vsay-shell-cli-amd64.exe',
+//     downloadUrl: `${BACKEND_URL}/agent/download/wxt-agent-session-amd64.exe`,
+//   },
+//   {
+//     id: 'helper-windows-arm64',
+//     name: 'wxt-agent-session-arm64.exe',
+//     os: 'Windows',
+//     osIcon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Windows_logo_-_2021.svg/960px-Windows_logo_-_2021.svg.png',
+//     arch: 'ARM64',
+//     archIcon: <Cpu />,
+//     downloadUrl: `${BACKEND_URL}/agent/download/wxt-agent-session-arm64.exe`,
+//   },
+//   {
+//     id: 'helper-macos-amd64',
+//     name: 'wxt-agent-session-macos-amd64',
+//     os: 'macOS',
+//     osIcon: 'https://www.svgrepo.com/show/503173/apple-logo.svg',
+//     arch: 'Intel (AMD64)',
+//     archIcon: <Cpu />,
+//     downloadUrl: `${BACKEND_URL}/agent/download/wxt-agent-session-macos-amd64`,
+//   },
+//   {
+//     id: 'helper-macos-arm64',
+//     name: 'wxt-agent-session-macos-arm64',
+//     os: 'macOS',
+//     osIcon: 'https://www.svgrepo.com/show/503173/apple-logo.svg',
+//     arch: 'Apple Silicon (ARM64)',
+//     archIcon: <Cpu />,
+//     downloadUrl: `${BACKEND_URL}/agent/download/wxt-agent-session-macos-arm64`,
 //   },
 // ];
-
-// // VS Code Extension data
-// const vscodeExtension = {
-//   name: 'vsay-vscode-extension.vsix',
-//   version: '1.2.1',
-//   downloadUrl: '/downloads/vsay-remote-machines-1.2.1.vsix',
-// };
+//
+// // // CLI packages data — filenames are FIXED (no version/commit embedded), so
+// // // this list never needs to change across releases. `make deploy-binaries
+// // // VERSION=x.y.z` in vsay-shell-cli always (re)writes these same names into
+// // // public/downloads/, so "latest" is always at a stable URL.
+// // const cliPackages = [
+// //   {
+// //     id: 'cli-debian-amd64',
+// //     name: 'vsay-shell-cli-amd64.deb',
+// //     os: 'Debian/Ubuntu',
+// //     osIcon: 'https://www.debian.org/logos/openlogo-nd.svg',
+// //     arch: 'AMD64',
+// //     archIcon: <Cpu />,
+// //     downloadUrl: '/downloads/vsay-shell-cli-amd64.deb',
+// //   },
+// //   {
+// //     id: 'cli-debian-arm64',
+// //     name: 'vsay-shell-cli-arm64.deb',
+// //     os: 'Debian/Ubuntu',
+// //     osIcon: 'https://www.debian.org/logos/openlogo-nd.svg',
+// //     arch: 'ARM64',
+// //     archIcon: <Cpu />,
+// //     downloadUrl: '/downloads/vsay-shell-cli-arm64.deb',
+// //   },
+// //   {
+// //     id: 'cli-rocky-x86_64',
+// //     name: 'vsay-shell-cli-x86_64.rpm',
+// //     os: 'Rocky/CentOS/RHEL',
+// //     osIcon: 'https://www.svgrepo.com/show/354273/redhat-icon.svg',
+// //     arch: 'x86_64',
+// //     archIcon: <Cpu />,
+// //     downloadUrl: '/downloads/vsay-shell-cli-x86_64.rpm',
+// //   },
+// //   {
+// //     id: 'cli-rocky-aarch64',
+// //     name: 'vsay-shell-cli-aarch64.rpm',
+// //     os: 'Rocky/CentOS/RHEL',
+// //     osIcon: 'https://www.svgrepo.com/show/354273/redhat-icon.svg',
+// //     arch: 'aarch64',
+// //     archIcon: <Cpu />,
+// //     downloadUrl: '/downloads/vsay-shell-cli-aarch64.rpm',
+// //   },
+// //   {
+// //     id: 'cli-macos-amd64',
+// //     name: 'vsay-shell-cli-amd64.dmg',
+// //     os: 'macOS',
+// //     osIcon: 'https://www.svgrepo.com/show/503173/apple-logo.svg',
+// //     arch: 'Intel (AMD64)',
+// //     archIcon: <Cpu />,
+// //     downloadUrl: '/downloads/vsay-shell-cli-amd64.dmg',
+// //   },
+// //   {
+// //     id: 'cli-macos-arm64',
+// //     name: 'vsay-shell-cli-arm64.dmg',
+// //     os: 'macOS',
+// //     osIcon: 'https://www.svgrepo.com/show/503173/apple-logo.svg',
+// //     arch: 'Apple Silicon (ARM64)',
+// //     archIcon: <Cpu />,
+// //     downloadUrl: '/downloads/vsay-shell-cli-arm64.dmg',
+// //   },
+// //   {
+// //     id: 'cli-windows-amd64',
+// //     name: 'vsay-shell-cli-amd64.exe',
+// //     os: 'Windows',
+// //     osIcon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Windows_logo_-_2021.svg/960px-Windows_logo_-_2021.svg.png',
+// //     arch: 'AMD64',
+// //     archIcon: <Cpu />,
+// //     downloadUrl: '/downloads/vsay-shell-cli-amd64.exe',
+// //   },
+// // ];
+//
+// // // VS Code Extension data
+// // const vscodeExtension = {
+// //   name: 'vsay-vscode-extension.vsix',
+// //   version: '1.2.1',
+// //   downloadUrl: '/downloads/vsay-remote-machines-1.2.1.vsix',
+// // };
 
 export default function PackagesPage() {
   const [activeTab, setActiveTab] = useState('agent');
@@ -202,18 +254,33 @@ export default function PackagesPage() {
   // Relative /downloads/... URLs are served by this same app, so a curl run
   // from the user's terminal needs the full origin — absolute backend URLs
   // (agent packages) are already usable as-is.
-  const getCurlCommand = (downloadUrl: string, filename: string) => {
+  // Windows downloads get an Invoke-WebRequest line, everything else gets curl.
+  //
+  // curl.exe exists on Windows 10 1803+, but in PowerShell `curl` is an ALIAS
+  // for Invoke-WebRequest, whose parameters are completely different — so a
+  // curl command pasted into PowerShell fails on its arguments rather than
+  // downloading anything.
+  const isWindowsFile = (filename: string) => filename.toLowerCase().endsWith('.exe');
+
+  const getDownloadCommand = (downloadUrl: string, filename: string) => {
     const url = downloadUrl.startsWith('http')
       ? downloadUrl
       : `${typeof window !== 'undefined' ? window.location.origin : ''}${downloadUrl}`;
-    return `curl ${url} --output ${filename}`;
+    return isWindowsFile(filename)
+      ? `Invoke-WebRequest -Uri "${url}" -OutFile "${filename}"`
+      : `curl -L -o ${filename} ${url}`;
   };
 
   const handleCopyCurl = (id: string, downloadUrl: string, filename: string) => {
-    navigator.clipboard.writeText(getCurlCommand(downloadUrl, filename));
+    navigator.clipboard.writeText(getDownloadCommand(downloadUrl, filename));
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
-    toast({ title: 'Copied!', description: 'curl command copied to clipboard' });
+    toast({
+      title: 'Copied!',
+      description: isWindowsFile(filename)
+        ? 'PowerShell download command copied'
+        : 'curl command copied to clipboard',
+    });
   };
 
   const renderPackageTable = (packages: typeof agentPackages) => (
@@ -259,7 +326,7 @@ export default function PackagesPage() {
                   size="icon"
                   variant="outline"
                   className="h-9 w-9 flex-shrink-0"
-                  title="Copy curl command"
+                  title="Copy download command"
                   onClick={() => handleCopyCurl(pkg.id, pkg.downloadUrl, pkg.name)}
                 >
                   {copiedId === pkg.id ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
@@ -328,6 +395,47 @@ export default function PackagesPage() {
               {renderPackageTable(agentPackages)}
             </CardContent>
           </Card>
+
+          {/* EPM: the session helper is now bundled inside the agent, so it needs no separate download; re-enable this if that ever changes
+          <Card className="glass-card mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MonitorSmartphone className="w-5 h-5 text-primary" />
+                Remote Control Session Helper
+              </CardTitle>
+              <CardDescription>
+                Required for remote control on Windows and macOS. Put it in the{' '}
+                <span className="font-medium text-foreground">same folder as the agent</span> —
+                that is where the agent looks for it. It is already inside the
+                .dmg and the Windows .zip installer; download it here only if you
+                installed the standalone agent binary.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {renderPackageTable(sessionHelperPackages)}
+              <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm">
+                <p className="mb-2 font-medium text-warning">Match the architecture</p>
+                <p className="text-muted-foreground">
+                  The helper must be the <span className="font-medium text-foreground">same architecture as the agent</span>{' '}
+                  on that machine — an amd64 helper next to an arm64 agent looks installed and then
+                  fails the moment someone tries to connect. If you are unsure, the agent says which
+                  one it needs in the error it reports to the portal.
+                </p>
+              </div>
+
+              <div className="mt-4 rounded-lg border border-border bg-muted/40 p-4 text-sm">
+                <p className="mb-2 font-medium">macOS also needs two permissions</p>
+                <p className="text-muted-foreground">
+                  Grant the helper both <span className="font-medium text-foreground">Screen Recording</span> and{' '}
+                  <span className="font-medium text-foreground">Accessibility</span> under System Settings › Privacy
+                  &amp; Security. macOS will not grant these silently — without them remote
+                  control cannot capture the screen or move the mouse.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          */}
+
         </TabsContent>
 
         {/* CLI Download Tab — EPM: disabled, re-enable later */}
@@ -396,7 +504,7 @@ export default function PackagesPage() {
                     size="icon"
                     variant="outline"
                     className="h-11 w-11 flex-shrink-0"
-                    title="Copy curl command"
+                    title="Copy download command"
                     onClick={() => handleCopyCurl('vscode-extension', vscodeExtension.downloadUrl, vscodeExtension.name)}
                   >
                     {copiedId === 'vscode-extension' ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}

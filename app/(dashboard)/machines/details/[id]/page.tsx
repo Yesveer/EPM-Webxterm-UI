@@ -33,6 +33,7 @@ import {
   Terminal,
   FileText,
   MoreHorizontal,
+  MonitorSmartphone,
   Pencil,
   Trash2,
   UserPlus,
@@ -108,6 +109,17 @@ import {
 
 // Shared between the Overview tab and the Logs & Sessions tab so both stay in sync
 // off the same polled state without duplicating the render logic.
+// isDesktopOS reports whether a machine has a graphical desktop to take over.
+//
+// Remote control is a Windows and macOS feature: it works by capturing the
+// session a user is logged into, and Linux machines in this fleet are managed
+// through the terminal instead. Offering the button where the agent would only
+// fail is worse than not offering it.
+function isDesktopOS(os: string | undefined): boolean {
+  const o = (os || '').toLowerCase();
+  return o.includes('windows') || o.includes('darwin') || o.includes('mac');
+}
+
 function ActiveSessionsPanel({ machine, desktopSessions, activeSessions, machineId }: {
   machine: Machine;
   desktopSessions: Array<{ session_id: string; username: string; protocol: string; started_at: string }>;
@@ -609,6 +621,19 @@ export default function MachineDetails() {
     window.open(`/desktop/${machineId}`, '_blank', 'noopener');
   };
 
+  // Open a remote-control session in its own tab.
+  //
+  // Unlike the desktop button above, this joins the session the user is ALREADY
+  // sitting in front of, so there are no credentials to collect — the user
+  // approves it on their own machine instead. Nothing is passed but the intent;
+  // the page drives the whole handshake.
+  const handleRemoteControl = (viewOnly: boolean) => {
+    if (!machine) return;
+    const params = new URLSearchParams({ name: machine.name });
+    if (viewOnly) params.set('view_only', '1');
+    window.open(`/remote-control/${machine.agent_id}?${params.toString()}`, '_blank', 'noopener');
+  };
+
   // Download a .rdp file and hand it to the native RDP client ("Windows App" /
   // Microsoft Remote Desktop). Native clients render Windows 11 correctly (no black
   // screen), so this is the reliable desktop path. Phase 1 connects directly to the
@@ -1079,7 +1104,16 @@ export default function MachineDetails() {
             <p className="text-muted-foreground">{machine.description}</p>
           </div>
         </div>
-        <DropdownMenu>
+        <div className="flex items-center gap-2">
+          {/* Remote control is offered only where the agent can actually do it:
+              it needs a graphical desktop, so Linux machines are terminal-only. */}
+          {machine.is_connected && isDesktopOS(machine.os) && (
+            <Button onClick={() => handleRemoteControl(false)}>
+              <MonitorSmartphone className="w-4 h-4 mr-2" />
+              Remote Control
+            </Button>
+          )}
+          <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline">
               Actions
@@ -1087,6 +1121,12 @@ export default function MachineDetails() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {machine.is_connected && isDesktopOS(machine.os) && (
+              <DropdownMenuItem onClick={() => handleRemoteControl(true)}>
+                <MonitorSmartphone className="w-4 h-4 mr-2" />
+                Remote Control (view only)
+              </DropdownMenuItem>
+            )}
             {(user?.id === machine.owner_id || user?.role === 'company_admin' || user?.role === 'super_admin') && (
               <DropdownMenuItem onClick={handleOpenUpdate}>
                 <RefreshCw className="w-4 h-4 mr-2" />
@@ -1098,7 +1138,8 @@ export default function MachineDetails() {
               Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Pending Machine Banner */}
@@ -1116,13 +1157,13 @@ export default function MachineDetails() {
                 </p>
                 <div className="relative">
                   <pre className="bg-muted/50 rounded-lg p-3 text-xs overflow-x-auto font-mono">
-{`sudo vsay-agent configure \\
+{`sudo wxt-agent configure \\
   --token "${machine.registration_token}" \\
   --host "YOUR_SERVER_URL" --allow-sudo`}
                   </pre>
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(`sudo vsay-agent configure --token "${machine.registration_token}" --host "YOUR_SERVER_URL" --allow-sudo`);
+                      navigator.clipboard.writeText(`sudo wxt-agent configure --token "${machine.registration_token}" --host "YOUR_SERVER_URL" --allow-sudo`);
                       toast({
                         title: "Copied",
                         description: "Command copied to clipboard",
@@ -1146,11 +1187,12 @@ export default function MachineDetails() {
             <Monitor className="w-4 h-4" />
             Overview
           </TabsTrigger>
-          {/* Windows → Desktop (RDP) only; everything else → Terminal */}
-          {machine.os?.toLowerCase().includes('windows') ? (
-            <TabsTrigger value="desktop" className="gap-2">
-              <Monitor className="w-4 h-4" />
-              Desktop
+          {/* Windows and macOS get the same thing: the user's live desktop.
+              Terminal is for machines with no desktop to take over. */}
+          {isDesktopOS(machine.os) ? (
+            <TabsTrigger value="remote-control" className="gap-2">
+              <MonitorSmartphone className="w-4 h-4" />
+              Remote Control
             </TabsTrigger>
           ) : (
             <TabsTrigger value="terminal" className="gap-2">
@@ -1158,6 +1200,14 @@ export default function MachineDetails() {
               Terminal
             </TabsTrigger>
           )}
+          {/* EPM: RDP/Desktop disabled — remote control joins the user's live session instead; re-enable later
+          {machine.os?.toLowerCase().includes('windows') ? (
+            <TabsTrigger value="desktop" className="gap-2">
+              <Monitor className="w-4 h-4" />
+              Desktop
+            </TabsTrigger>
+          ) : null}
+          */}
           <TabsTrigger value="access-users" className="gap-2">
             <Users className="w-4 h-4" />
             Access Users
@@ -1578,6 +1628,45 @@ export default function MachineDetails() {
         </TabsContent>
 
         {/* Desktop Tab (Windows RDP) */}
+        {/* Remote Control Tab — the live session the user is already in. */}
+        <TabsContent value="remote-control">
+          <Card className="glass-card">
+            <CardContent className="py-12">
+              <div className="mx-auto max-w-lg text-center">
+                <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+                  <MonitorSmartphone className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="mb-2 text-xl font-semibold">Remote Control</h3>
+                <p className="mb-6 text-sm text-muted-foreground">
+                  Join the session this user is already working in. They keep their screen,
+                  see everything you do, and have to approve the request before anything is
+                  shown to you. The whole session is recorded.
+                </p>
+
+                {!machine.is_connected ? (
+                  <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+                    This machine is offline. Remote control needs the agent connected.
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-3">
+                    <Button onClick={() => handleRemoteControl(false)}>
+                      <MonitorSmartphone className="mr-2 h-4 w-4" />
+                      Start Session
+                    </Button>
+                    <Button variant="outline" onClick={() => handleRemoteControl(true)}>
+                      View Only
+                    </Button>
+                  </div>
+                )}
+
+                <p className="mt-6 text-xs text-muted-foreground">
+                  Opens in a new tab. The user is prompted on their machine and can decline.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        {/* EPM: RDP/Desktop disabled — remote control joins the user's live session instead; re-enable later
         <TabsContent value="desktop">
           <Card className="glass-card overflow-hidden">
             {!rdpConnected ? (
@@ -1645,7 +1734,9 @@ export default function MachineDetails() {
                   Connect in browser
                 </Button>
 
+        */}
                 {/* Native RDP client option — reliable rendering (no black screen). */}
+        {/* EPM: RDP/Desktop disabled — remote control joins the user's live session instead; re-enable later
                 {machine.metadata?.remote_desktop !== 'vnc' && (
                   <div className="pt-2 space-y-2 border-t border-border/30">
                     <div className="flex items-center gap-2 pt-2">
@@ -1703,6 +1794,7 @@ export default function MachineDetails() {
             )}
           </Card>
         </TabsContent>
+        */}
 
         {/* Monitoring Tab */}
         <TabsContent value="monitoring" className="space-y-8">

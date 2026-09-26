@@ -139,7 +139,7 @@ export default function DeployApplicationsPage() {
             <p className="font-medium text-foreground">How it works</p>
             <p className="text-muted-foreground mt-0.5">
               Select a machine and the port your application is running on.
-              A public URL is created instantly — traffic is tunneled securely through vsay-agent
+              A public URL is created instantly — traffic is tunneled securely through wxt-agent
               running on that machine. No firewall rules needed.
             </p>
           </div>

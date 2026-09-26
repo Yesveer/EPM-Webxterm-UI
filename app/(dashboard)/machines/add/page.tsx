@@ -31,28 +31,29 @@ import { useAuth } from '@/contexts/AuthContext';
 import { machinesAPI } from '@/lib/machines-api';
 
 const operatingSystems = [
-  {
-    id: 'debian',
-    name: 'Debian/Ubuntu',
-    icon: 'https://www.debian.org/logos/openlogo-nd.svg',
-    version: 'Debian/Ubuntu',
-    architectures: [
-      { id: 'amd64', name: 'AMD64', icon: <Cpu /> },
-      { id: 'arm64', name: 'ARM64', icon: <Cpu />}
-    ],
-    packageType: 'deb'
-  },
-  {
-    id: 'rocky',
-    name: 'Rocky/CentOS/RHEL',
-    icon: 'https://www.svgrepo.com/show/354273/redhat-icon.svg',
-    version: 'Enterprise Linux',
-    architectures: [
-      { id: 'x86_64', name: 'x86_64', icon: <Cpu /> },
-      { id: 'aarch64', name: 'aarch64', icon: <Cpu /> }
-    ],
-    packageType: 'tar.gz'
-  },
+  // EPM: Linux/RHEL disabled — EPM targets Windows and macOS only; re-enable later
+//   {
+//     id: 'debian',
+//     name: 'Debian/Ubuntu',
+//     icon: 'https://www.debian.org/logos/openlogo-nd.svg',
+//     version: 'Debian/Ubuntu',
+//     architectures: [
+//       { id: 'amd64', name: 'AMD64', icon: <Cpu /> },
+//       { id: 'arm64', name: 'ARM64', icon: <Cpu />}
+//     ],
+//     packageType: 'deb'
+//   },
+//   {
+//     id: 'rocky',
+//     name: 'Rocky/CentOS/RHEL',
+//     icon: 'https://www.svgrepo.com/show/354273/redhat-icon.svg',
+//     version: 'Enterprise Linux',
+//     architectures: [
+//       { id: 'x86_64', name: 'x86_64', icon: <Cpu /> },
+//       { id: 'aarch64', name: 'aarch64', icon: <Cpu /> }
+//     ],
+//     packageType: 'tar.gz'
+//   },
   {
     id: 'macos',
     name: 'macOS',
@@ -99,7 +100,7 @@ const [selectedOS, setSelectedOS] = useState('');
   const [hostEntriesEnabled, setHostEntriesEnabled] = useState(false);
   const [hostEntries, setHostEntries] = useState<{ ip: string; domain: string }[]>([{ ip: '', domain: '' }]);
   const [copied, setCopied] = useState(false);
-  const [curlCopied, setCurlCopied] = useState(false);
+  const [downloadCmdCopied, setDownloadCmdCopied] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Registration data from API
@@ -121,24 +122,24 @@ const [selectedOS, setSelectedOS] = useState('');
   const isWindowsSelected = selectedOS === 'windows';
 
   const configCommand = registrationToken
-    ? `sudo vsay-agent configure \\
+    ? `sudo wxt-agent configure \\
   --token "${registrationToken}" \\
   --tenant "${user?.tenant_id || 'default'}" \\
   --org "${user?.tenant_id || 'default'}" \\
   --project "default" \\
   --user "${user?.username || 'admin'}" \\
-  --linux-user "${name}" \\
   --host "${BACKEND_URL}" \\
   --api-host "${GRPC_URL}" \\
-  --name "${name}" \\
-  --allow-sudo${tunnelFlag}${hostEntryFlags}`
+  --name "${name}"${tunnelFlag}${hostEntryFlags}`
     : 'Loading...';
 
   // Windows uses a single-line command (works in both cmd and PowerShell, run as
-  // Administrator). It creates a Windows RDP user — replace the <...> placeholders.
-  const windowsExeName = selectedArch ? `./vsay-agent-${selectedArch}.exe` : './vsay-agent.exe';
+  // Administrator). There are no placeholders to replace any more: remote
+  // control joins the session the user is already in, so there is no RDP
+  // account to create and no password to choose.
+  const windowsExeName = selectedArch ? `./wxt-agent-${selectedArch}.exe` : './wxt-agent.exe';
   const windowsConfigCommand = registrationToken
-    ? `${windowsExeName} configure --token "${registrationToken}" --tenant "${user?.tenant_id || 'default'}" --org "${user?.tenant_id || 'default'}" --project "default" --user "${user?.username || 'admin'}" --windows-password "<PASSWORD>" --host "${BACKEND_URL}" --api-host "${GRPC_URL}" --name "${name}"`
+    ? `${windowsExeName} configure --token "${registrationToken}" --tenant "${user?.tenant_id || 'default'}" --org "${user?.tenant_id || 'default'}" --project "default" --user "${user?.username || 'admin'}" --host "${BACKEND_URL}" --api-host "${GRPC_URL}" --name "${name}"`
     : 'Loading...';
 
   const activeConfigCommand = isWindowsSelected ? windowsConfigCommand : configCommand;
@@ -151,18 +152,33 @@ const [selectedOS, setSelectedOS] = useState('');
   const getAgentFilename = () => {
     if (!selectedOSObj || !selectedArch) return '';
     switch (selectedOSObj.packageType) {
-      case 'deb': return `vsay-agent-${selectedArch}.deb`;
-      case 'tar.gz': return `vsay-agent-${selectedArch}.tar.gz`;
-      case 'dmg': return `vsay-agent-${selectedArch}.dmg`;
-      case 'exe': return `vsay-agent-${selectedArch}.exe`;
+      // EPM: Linux/RHEL disabled — EPM targets Windows and macOS only; re-enable later
+      // case 'deb': return `wxt-agent-${selectedArch}.deb`;
+      // case 'tar.gz': return `wxt-agent-${selectedArch}.tar.gz`;
+      case 'dmg': return `wxt-agent-${selectedArch}.dmg`;
+      case 'exe': return `wxt-agent-${selectedArch}.exe`;
       default: return '';
     }
   };
 
   const agentFilename = getAgentFilename();
-  const downloadCurlCommand = agentFilename
-    ? `curl ${BACKEND_URL}/agent/download/${agentFilename} --output ${agentFilename}`
-    : '';
+
+  // Windows gets Invoke-WebRequest, not curl.
+  //
+  // curl.exe does ship with Windows 10 1803+, but inside PowerShell `curl` is
+  // an ALIAS for Invoke-WebRequest, which takes entirely different arguments.
+  // `curl -L -o file url` therefore fails there with a confusing parameter
+  // error — and PowerShell is exactly where the instructions send people.
+  const isWindowsPackage = selectedOSObj?.packageType === 'exe';
+
+  const downloadLine = (filename: string) =>
+    isWindowsPackage
+      ? `Invoke-WebRequest -Uri "${BACKEND_URL}/agent/download/${filename}" -OutFile "${filename}"`
+      : `curl -L -o ${filename} ${BACKEND_URL}/agent/download/${filename}`;
+
+  const downloadCommand = agentFilename ? downloadLine(agentFilename) : '';
+
+  const downloadShellName = isWindowsPackage ? 'PowerShell' : 'curl';
 
   // Download agent function
   const handleDownloadAgent = () => {
@@ -176,6 +192,7 @@ const [selectedOS, setSelectedOS] = useState('');
     }
 
     const downloadURL = `${BACKEND_URL}/agent/download/${agentFilename}`;
+
 
     // Create download link
     const link = document.createElement('a');
@@ -191,12 +208,17 @@ const [selectedOS, setSelectedOS] = useState('');
     });
   };
 
-  const handleCopyCurl = () => {
-    if (!downloadCurlCommand) return;
-    navigator.clipboard.writeText(downloadCurlCommand);
-    setCurlCopied(true);
-    toast({ title: "Copied!", description: "curl command copied to clipboard" });
-    setTimeout(() => setCurlCopied(false), 2000);
+  const handleCopyDownloadCommand = () => {
+    if (!downloadCommand) return;
+    navigator.clipboard.writeText(downloadCommand);
+    setDownloadCmdCopied(true);
+    toast({
+      title: "Copied!",
+      description: isWindowsPackage
+        ? "PowerShell download command copied"
+        : "curl command copied to clipboard",
+    });
+    setTimeout(() => setDownloadCmdCopied(false), 2000);
   };
 
   const handleCopy = () => {
@@ -604,27 +626,33 @@ const [selectedOS, setSelectedOS] = useState('');
                     <div className="flex-1 min-w-0">
                       <p className="font-medium">Ready to Download</p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        vsay-agent for {selectedOSObj.name} ({selectedOSObj.architectures.find(a => a.id === selectedArch)?.name})
+                        wxt-agent for {selectedOSObj.name} ({selectedOSObj.architectures.find(a => a.id === selectedArch)?.name})
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        One file. The session helper that remote control needs is bundled inside it
+                        and installed automatically.
                       </p>
                       <Button className="mt-3" size="sm" onClick={handleDownloadAgent}>
                         <Download className="w-4 h-4 mr-2" />
                         Download Agent
                       </Button>
 
-                      {downloadCurlCommand && (
+                      {downloadCommand && (
                         <div className="mt-3 min-w-0">
-                          <p className="text-xs text-muted-foreground mb-1.5">Or download via curl:</p>
+                          <p className="text-xs text-muted-foreground mb-1.5">
+                            {`Or download with ${downloadShellName}:`}
+                          </p>
                           <div className="relative min-w-0">
                             <pre className="p-3 pr-11 rounded-lg bg-muted text-xs font-mono overflow-x-auto max-w-full">
-                              <code className="whitespace-pre">{downloadCurlCommand}</code>
+                              <code className="whitespace-pre">{downloadCommand}</code>
                             </pre>
                             <Button
                               size="icon"
                               variant="ghost"
                               className="absolute top-1.5 right-1.5 h-7 w-7"
-                              onClick={handleCopyCurl}
+                              onClick={handleCopyDownloadCommand}
                             >
-                              {curlCopied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
+                              {downloadCmdCopied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
                             </Button>
                           </div>
                         </div>
@@ -638,13 +666,14 @@ const [selectedOS, setSelectedOS] = useState('');
               {selectedOS && selectedArch && selectedOSObj && (
                 <div className="p-4 rounded-xl border border-border bg-card">
                   <h4 className="font-medium mb-3">Installation Instructions</h4>
+                  {/* EPM: Linux/RHEL disabled — EPM targets Windows and macOS only; re-enable later
                   {selectedOS === 'debian' && (
                     <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2">
                       <li>Download the agent using the button above</li>
                       <li>Open a terminal on your machine</li>
                       <li>Navigate to downloads: <code className="font-mono bg-muted px-1 rounded">cd ~/Downloads</code></li>
-                      <li>Install the package: <code className="font-mono bg-muted px-1 rounded">sudo apt install ./vsay-agent-{selectedArch}.deb</code></li>
-                      <li>Verify installation: <code className="font-mono bg-muted px-1 rounded">vsay-agent version</code></li>
+                      <li>Install the package: <code className="font-mono bg-muted px-1 rounded">sudo apt install ./wxt-agent-{selectedArch}.deb</code></li>
+                      <li>Verify installation: <code className="font-mono bg-muted px-1 rounded">wxt-agent version</code></li>
                     </ol>
                   )}
                   {selectedOS === 'rocky' && (
@@ -652,30 +681,34 @@ const [selectedOS, setSelectedOS] = useState('');
                       <li>Download the agent using the button above</li>
                       <li>Open a terminal on your machine</li>
                       <li>Navigate to downloads: <code className="font-mono bg-muted px-1 rounded">cd ~/Downloads</code></li>
-                      <li>Extract archive: <code className="font-mono bg-muted px-1 rounded">tar -xvf vsay-agent-{selectedArch}.tar.gz</code></li>
-                      <li>Enter directory: <code className="font-mono bg-muted px-1 rounded">cd vsay-agent-{selectedArch}</code></li>
+                      <li>Extract archive: <code className="font-mono bg-muted px-1 rounded">tar -xvf wxt-agent-{selectedArch}.tar.gz</code></li>
+                      <li>Enter directory: <code className="font-mono bg-muted px-1 rounded">cd wxt-agent-{selectedArch}</code></li>
                       <li>Run installer: <code className="font-mono bg-muted px-1 rounded">sudo ./install.sh</code></li>
-                      <li>Verify installation: <code className="font-mono bg-muted px-1 rounded">vsay-agent version</code></li>
+                      <li>Verify installation: <code className="font-mono bg-muted px-1 rounded">wxt-agent version</code></li>
                     </ol>
                   )}
+                  */}
                   {selectedOS === 'macos' && (
                     <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2">
                       <li>Download the agent using the button above</li>
                       <li>Locate the downloaded DMG file in Downloads folder</li>
                       <li>Double-click the DMG file to mount it</li>
-                      <li>Drag the vsay-agent app to Applications folder</li>
+                      <li>Run <strong>Install.command</strong> inside the DMG — it installs both <code className="font-mono bg-muted px-1 rounded">wxt-agent</code> and <code className="font-mono bg-muted px-1 rounded">wxt-agent-session</code></li>
                       <li>If security warning appears: System Preferences → Security & Privacy → Allow</li>
-                      <li>Open Terminal and verify: <code className="font-mono bg-muted px-1 rounded">vsay-agent version</code></li>
+                      <li>Open Terminal and verify: <code className="font-mono bg-muted px-1 rounded">wxt-agent version</code></li>
+                      <li>
+                        <strong>For remote control:</strong> grant <code className="font-mono bg-muted px-1 rounded">wxt-agent-session</code> both{' '}
+                        <strong>Screen Recording</strong> and <strong>Accessibility</strong> under System Settings › Privacy &amp; Security.
+                        macOS cannot grant these silently, so remote control stays unavailable until you do.
+                      </li>
                     </ol>
                   )}
                   {selectedOS === 'windows' && (
                     <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2">
                       <li>Download the agent using the button above</li>
-                      <li>Locate the downloaded EXE file in Downloads folder</li>
-                      <li>Right-click on the file</li>
-                      <li>Select <strong>"Run as Administrator"</strong></li>
-                      <li>Follow the installation wizard</li>
-                      <li>Verify installation: Open Command Prompt and run <code className="font-mono bg-muted px-1 rounded">vsay-agent version</code></li>
+                      <li>Open PowerShell <strong>as Administrator</strong> in that folder</li>
+                      <li>Run the configure command from the next step</li>
+                      <li>Verify: <code className="font-mono bg-muted px-1 rounded">wxt-agent version</code> — it also reports whether the session helper is bundled</li>
                     </ol>
                   )}
                 </div>
@@ -735,33 +768,49 @@ const [selectedOS, setSelectedOS] = useState('');
               {isWindowsSelected ? (
                 <>
                   <div className="p-4 rounded-xl border border-border bg-card">
-                    <h4 className="font-medium mb-2">Windows RDP User</h4>
+                    <h4 className="font-medium mb-2">Session Helper</h4>
                     <p className="text-sm text-muted-foreground">
-                      Replace <code className="font-mono bg-muted px-1 rounded">&lt;PASSWORD&gt;</code> in the command
-                      with the password you want for remote desktop access. The agent auto-detects the current Windows
-                      username, sets this password, adds the account to <strong>Remote Desktop Users</strong>, and
-                      enables RDP. You&apos;ll enter that username and password when connecting from the Desktop tab.
+                      Remote control needs a helper running inside the user&apos;s desktop, because a
+                      Windows service cannot reach it from session 0. That helper is bundled inside
+                      the agent and installed by this command — there is nothing extra to download.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-xl border border-border bg-card">
+                    <h4 className="font-medium mb-2">No account is created</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Remote control joins the session the user is already signed into, so there is no separate
+                      account or password to set up, and nobody gets signed out when an admin connects.
                     </p>
                   </div>
                   <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
                     <p className="text-sm text-warning font-medium">
-                      Run this in Command Prompt or PowerShell <strong>as Administrator</strong>. Windows machines
-                      provide a remote desktop (RDP) — not a terminal.
+                      Run this in Command Prompt or PowerShell <strong>as Administrator</strong>.
                     </p>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="p-4 rounded-xl border border-border bg-card">
-                    <h4 className="font-medium mb-2">Linux User Configuration</h4>
+                    <h4 className="font-medium mb-2">Account Configuration</h4>
                     <p className="text-sm text-muted-foreground mb-3">
-                      The agent will create/use user &quot;{name}&quot; on the Linux machine.
+                      The agent will use the account &quot;{name}&quot; on this machine.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-border bg-card">
+                    <h4 className="font-medium mb-2">Remote Control Permissions</h4>
+                    <p className="text-sm text-muted-foreground">
+                      After installing, grant <code className="font-mono bg-muted px-1 rounded">wxt-agent-session</code> both{' '}
+                      <strong>Screen Recording</strong> and <strong>Accessibility</strong> under
+                      System Settings › Privacy &amp; Security. macOS cannot grant these silently,
+                      and remote control stays unavailable until someone does.
                     </p>
                   </div>
 
                   <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
                     <p className="text-sm text-warning font-medium">
-                      With --allow-sudo, the agent can execute commands with elevated privileges.
+                      Run this with sudo. With --allow-sudo, the agent can execute commands with
+                      elevated privileges.
                     </p>
                   </div>
                 </>

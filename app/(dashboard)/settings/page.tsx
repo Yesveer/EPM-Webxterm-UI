@@ -1287,7 +1287,9 @@ export default function SettingsPage() {
                       S3 Session Recording
                     </CardTitle>
                     <CardDescription className="mt-1">
-                      Terminal sessions are automatically saved to S3 when enabled. Recordings appear in the Session Recordings tab.
+                      Remote-control and terminal sessions are automatically recorded to S3 when enabled, and
+                      appear in the Session Recordings tab. With this off, nothing is recorded and nothing is
+                      uploaded.
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -1323,8 +1325,14 @@ export default function SettingsPage() {
                     <div className="space-y-1.5"><Label>Bucket Name</Label><Input placeholder="my-recordings-bucket" value={s3.bucket} onChange={e => setS3(p => ({ ...p, bucket: e.target.value }))} /></div>
                     <div className="space-y-1.5"><Label>Region <span className="ml-1 text-xs text-muted-foreground font-normal">(optional)</span></Label><Input placeholder="us-east-1" value={s3.region} onChange={e => setS3(p => ({ ...p, region: e.target.value }))} /></div>
                   </div>
-                  <div className="rounded-md bg-muted/40 border border-border/60 px-4 py-2.5 text-xs font-mono text-muted-foreground">
-                    Recording path: <span className="text-foreground">webxterm/&#123;tenant&#125;/&#123;machine&#125;/&#123;session&#125;/&#123;user&#125;/videos/session.log</span>
+                  <div className="space-y-1.5 rounded-md bg-muted/40 border border-border/60 px-4 py-2.5 text-xs text-muted-foreground">
+                    <p className="font-mono">
+                      Recording path: <span className="text-foreground">&#123;organisation&#125;/&#123;group&#125;/&#123;machine&#125;/&#123;user&#125;/&#123;session&#125;/desktop.guac</span>
+                    </p>
+                    <p>
+                      Objects are stored gzipped with <span className="font-mono">Content-Encoding: gzip</span>, so
+                      browsers decompress them transparently during playback.
+                    </p>
                   </div>
                   {s3Status !== 'idle' && (
                     <div className={cn('flex items-center gap-2 rounded-md px-4 py-2.5 text-sm', s3Status === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-destructive/10 text-destructive border border-destructive/30')}>
@@ -1814,9 +1822,13 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Clock className="w-5 h-5 text-primary" />Idle Session Timeout</CardTitle>
                 <CardDescription>
-                  How long a terminal session may sit idle — no commands typed — before it&apos;s automatically
-                  closed. The user has to start a new session afterwards; nothing is silently resumed. Applies
-                  to every user in the organisation.
+                  How long a session may sit idle before it&apos;s automatically closed — no commands typed in a
+                  terminal, no mouse or keyboard activity in a remote-control session. The user has to start a
+                  new session afterwards; nothing is silently resumed. Applies to every user in the organisation.
+                  <span className="mt-2 block text-xs">
+                    Remote-control sessions are closed by the machine itself, so a crashed or hung browser tab
+                    cannot leave someone&apos;s screen shared.
+                  </span>
                 </CardDescription>
               </CardHeader>
               <CardContent>

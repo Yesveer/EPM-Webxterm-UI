@@ -445,7 +445,7 @@ export default function DeploymentDetailPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-2">
-            <p>Make sure <strong>vsay-agent</strong> is running on <strong>{dep.machine_name || dep.machine_id}</strong>.</p>
+            <p>Make sure <strong>wxt-agent</strong> is running on <strong>{dep.machine_name || dep.machine_id}</strong>.</p>
             <p>The agent will automatically poll for pending tunnels and connect. This page will update when the tunnel goes live.</p>
           </CardContent>
         </Card>
@@ -461,7 +461,7 @@ export default function DeploymentDetailPage() {
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
             <p>The agent on <strong>{dep.machine_name || dep.machine_id}</strong> disconnected unexpectedly.
-              Click <strong>Start</strong> to make it reconnect, or check if vsay-agent is still running.</p>
+              Click <strong>Start</strong> to make it reconnect, or check if wxt-agent is still running.</p>
           </CardContent>
         </Card>
       )}
