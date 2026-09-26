@@ -1,0 +1,796 @@
+'use client';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  ChevronRight,
+  ChevronLeft,
+  Monitor,
+  Download,
+  Terminal,
+  Copy,
+  Check,
+  Loader2,
+  Cpu,
+  Globe,
+  Network,
+  Plus,
+  Trash2,
+  CheckCircle2,
+  ScrollText,
+} from 'lucide-react';
+import { Breadcrumb } from '@/components/ui/page-breadcrumb';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { machinesAPI } from '@/lib/machines-api';
+
+const operatingSystems = [
+  {
+    id: 'debian',
+    name: 'Debian/Ubuntu',
+    icon: 'https://www.debian.org/logos/openlogo-nd.svg',
+    version: 'Debian/Ubuntu',
+    architectures: [
+      { id: 'amd64', name: 'AMD64', icon: <Cpu /> },
+      { id: 'arm64', name: 'ARM64', icon: <Cpu />}
+    ],
+    packageType: 'deb'
+  },
+  {
+    id: 'rocky',
+    name: 'Rocky/CentOS/RHEL',
+    icon: 'https://www.svgrepo.com/show/354273/redhat-icon.svg',
+    version: 'Enterprise Linux',
+    architectures: [
+      { id: 'x86_64', name: 'x86_64', icon: <Cpu /> },
+      { id: 'aarch64', name: 'aarch64', icon: <Cpu /> }
+    ],
+    packageType: 'tar.gz'
+  },
+  {
+    id: 'macos',
+    name: 'macOS',
+    icon: 'https://www.svgrepo.com/show/503173/apple-logo.svg',
+    version: 'Ventura+',
+    architectures: [
+      { id: 'amd64', name: 'Intel (AMD64)', icon: <Cpu /> },
+      { id: 'arm64', name: 'Apple Silicon (ARM64)', icon: <Cpu /> }
+    ],
+    packageType: 'dmg'
+  },
+  {
+    id: 'windows',
+    name: 'Windows',
+    icon: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Windows_logo_-_2021.svg/960px-Windows_logo_-_2021.svg.png',
+    version: '10/11',
+    architectures: [
+      { id: 'amd64', name: 'AMD64', icon: <Cpu /> },
+      { id: 'arm64', name: 'ARM64', icon: <Cpu /> }
+    ],
+    packageType: 'exe'
+  },
+];
+
+const steps = [
+  { id: 1, title: 'Basic Info', description: 'Machine name and description' },
+  { id: 2, title: 'Download Agent', description: 'Install the vsay agent' },
+  { id: 3, title: 'Configure', description: 'Run the configuration command' },
+];
+  
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080';
+const GRPC_URL = process.env.NEXT_PUBLIC_GRPC_URL || 'localhost:8081';
+const TUNNEL_URL = process.env.NEXT_PUBLIC_TUNNEL_URL || '';
+
+export default function MachineAdd() {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+const [selectedOS, setSelectedOS] = useState('');
+  const [selectedArch, setSelectedArch] = useState('');
+  const [deployApplication, setDeployApplication] = useState(false);
+  const [customScriptEnabled, setCustomScriptEnabled] = useState(false);
+  const [customScript, setCustomScript] = useState('');
+  const [hostEntriesEnabled, setHostEntriesEnabled] = useState(false);
+  const [hostEntries, setHostEntries] = useState<{ ip: string; domain: string }[]>([{ ip: '', domain: '' }]);
+  const [copied, setCopied] = useState(false);
+  const [curlCopied, setCurlCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Registration data from API
+  const [registrationToken, setRegistrationToken] = useState('');
+  const [machineCreated, setMachineCreated] = useState(false);
+
+  const router = useRouter();
+  const { toast } = useToast();
+  const { token, user } = useAuth();
+
+  // Generate the config command with actual registration token
+  const tunnelFlag = deployApplication && TUNNEL_URL ? ` \\\n  --tunnel-url "${TUNNEL_URL}"` : '';
+  const hostEntryFlags = hostEntriesEnabled
+    ? hostEntries
+        .filter(e => e.ip.trim() && e.domain.trim())
+        .map(e => ` \\\n  --host-entry "${e.ip.trim()}:${e.domain.trim()}"`)
+        .join('')
+    : '';
+  const isWindowsSelected = selectedOS === 'windows';
+
+  const configCommand = registrationToken
+    ? `sudo vsay-agent configure \\
+  --token "${registrationToken}" \\
+  --tenant "${user?.tenant_id || 'default'}" \\
+  --org "${user?.tenant_id || 'default'}" \\
+  --project "default" \\
+  --user "${user?.username || 'admin'}" \\
+  --linux-user "${name}" \\
+  --host "${BACKEND_URL}" \\
+  --api-host "${GRPC_URL}" \\
+  --name "${name}" \\
+  --allow-sudo${tunnelFlag}${hostEntryFlags}`
+    : 'Loading...';
+
+  // Windows uses a single-line command (works in both cmd and PowerShell, run as
+  // Administrator). It creates a Windows RDP user — replace the <...> placeholders.
+  const windowsExeName = selectedArch ? `./vsay-agent-${selectedArch}.exe` : './vsay-agent.exe';
+  const windowsConfigCommand = registrationToken
+    ? `${windowsExeName} configure --token "${registrationToken}" --tenant "${user?.tenant_id || 'default'}" --org "${user?.tenant_id || 'default'}" --project "default" --user "${user?.username || 'admin'}" --windows-password "<PASSWORD>" --host "${BACKEND_URL}" --api-host "${GRPC_URL}" --name "${name}"`
+    : 'Loading...';
+
+  const activeConfigCommand = isWindowsSelected ? windowsConfigCommand : configCommand;
+
+  // Get selected OS object
+  const selectedOSObj = operatingSystems.find(os => os.id === selectedOS);
+
+  // Filename for the currently selected OS/architecture — shared by the
+  // download button and the curl command below it, so they never drift apart.
+  const getAgentFilename = () => {
+    if (!selectedOSObj || !selectedArch) return '';
+    switch (selectedOSObj.packageType) {
+      case 'deb': return `vsay-agent-${selectedArch}.deb`;
+      case 'tar.gz': return `vsay-agent-${selectedArch}.tar.gz`;
+      case 'dmg': return `vsay-agent-${selectedArch}.dmg`;
+      case 'exe': return `vsay-agent-${selectedArch}.exe`;
+      default: return '';
+    }
+  };
+
+  const agentFilename = getAgentFilename();
+  const downloadCurlCommand = agentFilename
+    ? `curl ${BACKEND_URL}/agent/download/${agentFilename} --output ${agentFilename}`
+    : '';
+
+  // Download agent function
+  const handleDownloadAgent = () => {
+    if (!selectedOS || !selectedArch || !selectedOSObj || !agentFilename) {
+      toast({
+        title: "Selection required",
+        description: "Please select OS and architecture",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const downloadURL = `${BACKEND_URL}/agent/download/${agentFilename}`;
+
+    // Create download link
+    const link = document.createElement('a');
+    link.href = downloadURL;
+    link.download = agentFilename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "Download started",
+      description: `Downloading ${agentFilename}`
+    });
+  };
+
+  const handleCopyCurl = () => {
+    if (!downloadCurlCommand) return;
+    navigator.clipboard.writeText(downloadCurlCommand);
+    setCurlCopied(true);
+    toast({ title: "Copied!", description: "curl command copied to clipboard" });
+    setTimeout(() => setCurlCopied(false), 2000);
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(activeConfigCommand);
+    setCopied(true);
+    toast({ title: "Copied!", description: "Command copied to clipboard" });
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const createPendingMachine = async () => {
+    if (!token) {
+      toast({ title: "Error", description: "Not authenticated", variant: "destructive" });
+      return false;
+    }
+
+    setLoading(true);
+    try {
+      const response = await machinesAPI.createPendingMachine(token, name, description, deployApplication, customScriptEnabled ? customScript : '');
+      setRegistrationToken(response.registration_token);
+      setMachineCreated(true);
+      toast({
+        title: "Machine template created!",
+        description: `Registration token generated for "${name}"`
+      });
+      return true;
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Failed to create machine';
+      if (errorMessage.includes('already exists')) {
+        toast({
+          title: "Name already taken",
+          description: "A machine with this name already exists. Please choose a different name.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive"
+        });
+      }
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleNext = async () => {
+    if (currentStep === 1) {
+      if (!name) {
+        toast({ title: "Required fields", description: "Please fill in all fields", variant: "destructive" });
+        return;
+      }
+
+      // Create pending machine when moving from step 1 to step 2
+      if (!machineCreated) {
+        const success = await createPendingMachine();
+        if (!success) return;
+      }
+
+      setCurrentStep(2);
+    } else if (currentStep === 2) {
+      if (!selectedOS) {
+        toast({ title: "Select OS", description: "Please select an operating system", variant: "destructive" });
+        return;
+      }
+      if (!selectedArch) {
+        toast({ title: "Select Architecture", description: "Please select a CPU architecture", variant: "destructive" });
+        return;
+      }
+      setCurrentStep(3);
+    } else if (currentStep === 3) {
+      toast({
+        title: "Setup complete!",
+        description: "Run the command on your machine to connect it."
+      });
+      router.push('/machines');
+    }
+  };
+
+  const handleBack = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  return (
+    <div className="animate-fade-in max-w-3xl mx-auto">
+      <Breadcrumb
+        items={[
+          { label: 'Machines', href: '/machines' },
+          { label: 'Add Machine' }
+        ]}
+        className="mb-6"
+      />
+
+      {/* Steps Progress */}
+      <div className="flex items-center justify-between mb-8">
+        {steps.map((step, index) => (
+          <div key={step.id} className="flex items-center">
+            <div className="flex flex-col items-center">
+              <div
+                className={cn(
+                  "w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm transition-colors",
+                  currentStep >= step.id
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground"
+                )}
+              >
+                {step.id}
+              </div>
+              <div className="mt-2 text-center hidden sm:block">
+                <p className={cn(
+                  "text-sm font-medium",
+                  currentStep >= step.id ? "text-foreground" : "text-muted-foreground"
+                )}>
+                  {step.title}
+                </p>
+                <p className="text-xs text-muted-foreground">{step.description}</p>
+              </div>
+            </div>
+            {index < steps.length - 1 && (
+              <div className={cn(
+                "h-0.5 w-16 sm:w-24 lg:w-32 mx-2 sm:mx-4",
+                currentStep > step.id ? "bg-primary" : "bg-muted"
+              )} />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Step Content */}
+      <Card className="glass-card">
+        {/* Step 1: Basic Info */}
+        {currentStep === 1 && (
+          <>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Monitor className="w-5 h-5 text-primary" />
+                Basic Information
+              </CardTitle>
+              <CardDescription>Enter the basic details for your machine</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="name">Machine Name (unique)</Label>
+                <Input
+                  id="name"
+                  placeholder="e.g., prod-server-01"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={machineCreated}
+                />
+                <p className="text-xs text-muted-foreground">
+                  This name must be unique and will identify your machine.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Brief description of this machine's purpose..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={4}
+                  disabled={machineCreated}
+                />
+              </div>
+              {/* Linux User field removed — machine name is used as linux-user in config command */}
+              {/* <div className="space-y-2">
+                <Label htmlFor="linuxUser">Linux User (Optional)</Label>
+                <Input
+                  id="linuxUser"
+                  placeholder="e.g., ubuntu, admin, root"
+                  value={linuxUser}
+                  onChange={(e) => setLinuxUser(e.target.value)}
+                  disabled={machineCreated}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to auto-detect current user. Used with --linux-user flag.
+                </p>
+              </div> */}
+
+              {/* Host Entries toggle */}
+              {/* <div className={`rounded-xl border p-4 space-y-3 transition-colors ${hostEntriesEnabled ? 'border-primary/40 bg-primary/5' : 'border-border'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${hostEntriesEnabled ? 'bg-primary/10' : 'bg-muted'}`}>
+                      <Network className={`w-4 h-4 ${hostEntriesEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">Host Entries</p>
+                      <p className="text-xs text-muted-foreground">Add custom /etc/hosts entries on the machine (max 5)</p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={hostEntriesEnabled}
+                    onCheckedChange={(v) => setHostEntriesEnabled(v)}
+                    disabled={machineCreated}
+                  />
+                </div>
+
+                {hostEntriesEnabled && (
+                  <div className="space-y-2 pt-1">
+                    <div className="grid grid-cols-[1fr_1fr_32px] gap-2 px-1">
+                      <p className="text-xs font-medium text-muted-foreground">IP Address</p>
+                      <p className="text-xs font-medium text-muted-foreground">Domain / Hostname</p>
+                      <span />
+                    </div>
+
+                    {hostEntries.map((entry, i) => (
+                      <div key={i} className="grid grid-cols-[1fr_1fr_32px] gap-2 items-center">
+                        <div className="relative">
+                          <Input
+                            placeholder="192.168.1.10"
+                            value={entry.ip}
+                            disabled={machineCreated}
+                            onChange={e => setHostEntries(prev => prev.map((r, j) => j === i ? { ...r, ip: e.target.value } : r))}
+                            className={`font-mono text-sm ${entry.ip && /^(\d{1,3}\.){3}\d{1,3}$/.test(entry.ip.trim()) ? 'border-green-500/50' : ''}`}
+                          />
+                          {entry.ip && /^(\d{1,3}\.){3}\d{1,3}$/.test(entry.ip.trim()) && (
+                            <CheckCircle2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-green-500 pointer-events-none" />
+                          )}
+                        </div>
+                        <div className="relative">
+                          <Input
+                            placeholder="example.internal"
+                            value={entry.domain}
+                            disabled={machineCreated}
+                            onChange={e => setHostEntries(prev => prev.map((r, j) => j === i ? { ...r, domain: e.target.value } : r))}
+                            className={`text-sm ${entry.domain && entry.domain.trim().includes('.') ? 'border-green-500/50' : ''}`}
+                          />
+                          {entry.domain && entry.domain.trim().includes('.') && (
+                            <CheckCircle2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-green-500 pointer-events-none" />
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={machineCreated || hostEntries.length === 1}
+                          onClick={() => setHostEntries(prev => prev.filter((_, j) => j !== i))}
+                          className="w-8 h-8 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+
+                    {hostEntries.length < 5 && !machineCreated && (
+                      <button
+                        type="button"
+                        onClick={() => setHostEntries(prev => [...prev, { ip: '', domain: '' }])}
+                        className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors mt-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add entry
+                      </button>
+                    )}
+
+                    <p className="text-xs text-muted-foreground pt-1">
+                      These will be written to <code className="font-mono bg-muted px-1 rounded">/etc/hosts</code> before the agent connects.
+                    </p>
+                  </div>
+                )}
+              </div> */}
+
+              {/* Custom Init Script toggle */}
+              {/* <div className={`rounded-xl border p-4 space-y-3 transition-colors ${customScriptEnabled ? 'border-primary/40 bg-primary/5' : 'border-border'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${customScriptEnabled ? 'bg-primary/10' : 'bg-muted'}`}>
+                      <ScrollText className={`w-4 h-4 ${customScriptEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">Init Script</p>
+                      <p className="text-xs text-muted-foreground">Run a shell script once when the machine first comes online</p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={customScriptEnabled}
+                    onCheckedChange={setCustomScriptEnabled}
+                    disabled={machineCreated}
+                  />
+                </div>
+
+                {customScriptEnabled && (
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">Shell Script</Label>
+                      <span className="text-xs text-muted-foreground">Runs as root · output → ~/script.log</span>
+                    </div>
+                    <div className="relative rounded-lg overflow-hidden border border-border">
+
+                      <div className="bg-[#1c1c1e] flex items-center gap-1.5 px-3 py-2 border-b border-[#2d2d2d]">
+                        <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f56] border border-[#e0443e]" />
+                        <div className="w-2.5 h-2.5 rounded-full bg-[#ffbd2e] border border-[#dea123]" />
+                        <div className="w-2.5 h-2.5 rounded-full bg-[#27c93f] border border-[#1aab29]" />
+                        <span className="ml-2 text-[#8b8b8b] text-xs">init.sh</span>
+                      </div>
+                      <textarea
+                        value={customScript}
+                        onChange={e => setCustomScript(e.target.value)}
+                        disabled={machineCreated}
+                        rows={10}
+                        spellCheck={false}
+                        placeholder={'#!/bin/bash\n# This script runs once when the machine registers for the first time.\n# Output is saved to ~/script.log\n\napt-get update -y\napt-get install -y curl git'}
+                        className="w-full bg-[#0d1117] text-[#c9d1d9] font-mono text-sm px-4 py-3 resize-y focus:outline-none placeholder:text-[#6e7681] disabled:opacity-50"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Machine status will show <span className="font-medium text-yellow-500">Executing Script</span> until the script finishes, then automatically go <span className="font-medium text-green-500">Online</span>.
+                    </p>
+                  </div>
+                )}
+              </div> */}
+
+              {/* Deploy Application toggle */}
+              {/* <div className={`rounded-xl border p-4 space-y-3 transition-colors ${deployApplication ? 'border-primary/40 bg-primary/5' : 'border-border'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${deployApplication ? 'bg-primary/10' : 'bg-muted'}`}>
+                      <Globe className={`w-4 h-4 ${deployApplication ? 'text-primary' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">Deploy Application</p>
+                      <p className="text-xs text-muted-foreground">Expose this machine as a deployed app via tunnel</p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={deployApplication}
+                    onCheckedChange={setDeployApplication}
+                    disabled={machineCreated}
+                  />
+                </div>
+
+              </div> */}
+            </CardContent>
+          </>
+        )}
+
+        {/* Step 2: Download Agent */}
+        {currentStep === 2 && (
+          <>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Download className="w-5 h-5 text-primary" />
+                Download Agent
+              </CardTitle>
+              <CardDescription>Select your operating system, architecture, and download the vsay agent</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* OS Selection */}
+              <div className="space-y-3">
+                <Label>Operating System</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  {operatingSystems.map((os) => (
+                    <button
+                      key={os.id}
+                      onClick={() => {
+                        setSelectedOS(os.id);
+                        setSelectedArch(''); // Reset architecture when OS changes
+                      }}
+                      className={cn(
+                        "p-4 rounded-xl border-2 transition-all text-center",
+                        selectedOS === os.id
+                          ? "border-primary bg-primary/10"
+                          : "border-border hover:border-primary/50"
+                      )}
+                    >
+                      <span className="text-2xl justify-center flex"><img src={os.icon} className="w-12 h-12" alt={os.name} /></span>
+                      <p className="font-medium mt-2">{os.name}</p>
+                      <p className="text-xs text-muted-foreground">{os.version}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Architecture Selection */}
+              {selectedOS && selectedOSObj && (
+                <div className="space-y-3">
+                  <Label>Architecture</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {selectedOSObj.architectures.map((arch) => (
+                      <button
+                        key={arch.id}
+                        onClick={() => setSelectedArch(arch.id)}
+                        className={cn(
+                          "p-4 rounded-xl border-2 transition-all text-center",
+                          selectedArch === arch.id
+                            ? "border-primary bg-primary/10"
+                            : "border-border hover:border-primary/50"
+                        )}
+                      >
+                        <span className="text-3xl justify-center flex">{arch.icon}</span>
+                        <p className="font-medium mt-2 text-sm">{arch.name}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Download Section */}
+              {selectedOS && selectedArch && selectedOSObj && (
+                <div className="p-4 rounded-xl bg-muted/50 border border-border">
+                  <div className="flex items-start gap-3">
+                    <Download className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium">Ready to Download</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        vsay-agent for {selectedOSObj.name} ({selectedOSObj.architectures.find(a => a.id === selectedArch)?.name})
+                      </p>
+                      <Button className="mt-3" size="sm" onClick={handleDownloadAgent}>
+                        <Download className="w-4 h-4 mr-2" />
+                        Download Agent
+                      </Button>
+
+                      {downloadCurlCommand && (
+                        <div className="mt-3 min-w-0">
+                          <p className="text-xs text-muted-foreground mb-1.5">Or download via curl:</p>
+                          <div className="relative min-w-0">
+                            <pre className="p-3 pr-11 rounded-lg bg-muted text-xs font-mono overflow-x-auto max-w-full">
+                              <code className="whitespace-pre">{downloadCurlCommand}</code>
+                            </pre>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="absolute top-1.5 right-1.5 h-7 w-7"
+                              onClick={handleCopyCurl}
+                            >
+                              {curlCopied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Installation Instructions */}
+              {selectedOS && selectedArch && selectedOSObj && (
+                <div className="p-4 rounded-xl border border-border bg-card">
+                  <h4 className="font-medium mb-3">Installation Instructions</h4>
+                  {selectedOS === 'debian' && (
+                    <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2">
+                      <li>Download the agent using the button above</li>
+                      <li>Open a terminal on your machine</li>
+                      <li>Navigate to downloads: <code className="font-mono bg-muted px-1 rounded">cd ~/Downloads</code></li>
+                      <li>Install the package: <code className="font-mono bg-muted px-1 rounded">sudo apt install ./vsay-agent-{selectedArch}.deb</code></li>
+                      <li>Verify installation: <code className="font-mono bg-muted px-1 rounded">vsay-agent version</code></li>
+                    </ol>
+                  )}
+                  {selectedOS === 'rocky' && (
+                    <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2">
+                      <li>Download the agent using the button above</li>
+                      <li>Open a terminal on your machine</li>
+                      <li>Navigate to downloads: <code className="font-mono bg-muted px-1 rounded">cd ~/Downloads</code></li>
+                      <li>Extract archive: <code className="font-mono bg-muted px-1 rounded">tar -xvf vsay-agent-{selectedArch}.tar.gz</code></li>
+                      <li>Enter directory: <code className="font-mono bg-muted px-1 rounded">cd vsay-agent-{selectedArch}</code></li>
+                      <li>Run installer: <code className="font-mono bg-muted px-1 rounded">sudo ./install.sh</code></li>
+                      <li>Verify installation: <code className="font-mono bg-muted px-1 rounded">vsay-agent version</code></li>
+                    </ol>
+                  )}
+                  {selectedOS === 'macos' && (
+                    <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2">
+                      <li>Download the agent using the button above</li>
+                      <li>Locate the downloaded DMG file in Downloads folder</li>
+                      <li>Double-click the DMG file to mount it</li>
+                      <li>Drag the vsay-agent app to Applications folder</li>
+                      <li>If security warning appears: System Preferences → Security & Privacy → Allow</li>
+                      <li>Open Terminal and verify: <code className="font-mono bg-muted px-1 rounded">vsay-agent version</code></li>
+                    </ol>
+                  )}
+                  {selectedOS === 'windows' && (
+                    <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-2">
+                      <li>Download the agent using the button above</li>
+                      <li>Locate the downloaded EXE file in Downloads folder</li>
+                      <li>Right-click on the file</li>
+                      <li>Select <strong>"Run as Administrator"</strong></li>
+                      <li>Follow the installation wizard</li>
+                      <li>Verify installation: Open Command Prompt and run <code className="font-mono bg-muted px-1 rounded">vsay-agent version</code></li>
+                    </ol>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </>
+        )}
+
+        {/* Step 3: Configure */}
+        {currentStep === 3 && (
+          <>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Terminal className="w-5 h-5 text-primary" />
+                Configure Agent
+              </CardTitle>
+              <CardDescription>Run this command on your machine to connect it to "{name}"</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Show selected configuration */}
+              {selectedOSObj && (
+                <div className="p-3 rounded-lg bg-muted/50 text-sm">
+                  <p className="text-muted-foreground">
+                    <span className="font-medium text-foreground">Selected:</span> {selectedOSObj.name} / {selectedOSObj.architectures.find(a => a.id === selectedArch)?.name}
+                  </p>
+                </div>
+              )}
+
+              {!isWindowsSelected && (
+                <div className="inline-flex items-center px-3 py-1.5 rounded-md border border-border bg-muted/30 text-sm font-medium">
+                  With Root Access
+                </div>
+              )}
+
+              <div className="relative">
+                <pre className="p-4 rounded-xl terminal-bg text-sm font-mono overflow-x-auto">
+                  <code className="terminal-text">{activeConfigCommand}</code>
+                </pre>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="absolute top-2 right-2"
+                  onClick={handleCopy}
+                  disabled={!registrationToken}
+                >
+                  {copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
+                </Button>
+              </div>
+
+              <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
+                <p className="text-sm font-medium text-primary">
+                  This command contains a unique token for machine "{name}".
+                  When you run it, your machine will automatically connect to this template.
+                </p>
+              </div>
+
+              {isWindowsSelected ? (
+                <>
+                  <div className="p-4 rounded-xl border border-border bg-card">
+                    <h4 className="font-medium mb-2">Windows RDP User</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Replace <code className="font-mono bg-muted px-1 rounded">&lt;PASSWORD&gt;</code> in the command
+                      with the password you want for remote desktop access. The agent auto-detects the current Windows
+                      username, sets this password, adds the account to <strong>Remote Desktop Users</strong>, and
+                      enables RDP. You&apos;ll enter that username and password when connecting from the Desktop tab.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
+                    <p className="text-sm text-warning font-medium">
+                      Run this in Command Prompt or PowerShell <strong>as Administrator</strong>. Windows machines
+                      provide a remote desktop (RDP) — not a terminal.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="p-4 rounded-xl border border-border bg-card">
+                    <h4 className="font-medium mb-2">Linux User Configuration</h4>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      The agent will create/use user &quot;{name}&quot; on the Linux machine.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
+                    <p className="text-sm text-warning font-medium">
+                      With --allow-sudo, the agent can execute commands with elevated privileges.
+                    </p>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </>
+        )}
+
+        {/* Navigation */}
+        <div className="flex items-center justify-between p-6 border-t border-border">
+          <Button variant="outline" onClick={handleBack} disabled={currentStep === 1 || loading}>
+            <ChevronLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+          <Button onClick={handleNext} disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                {currentStep === 3 ? 'Complete Setup' : 'Next'}
+                {currentStep < 3 && <ChevronRight className="w-4 h-4 ml-2" />}
+              </>
+            )}
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}

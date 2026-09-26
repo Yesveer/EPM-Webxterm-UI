@@ -1,0 +1,27 @@
+#!/bin/sh
+set -e
+
+# Replace NEXT_PUBLIC_* placeholders in built JS files with actual runtime env values
+ENV_VARS="
+NEXT_PUBLIC_API_URL
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
+NEXT_PUBLIC_BACKEND_URL
+NEXT_PUBLIC_GRPC_URL
+NEXT_PUBLIC_DOCUMENTATION_URL
+NEXT_PUBLIC_COMUNITY_URL
+NEXT_PUBLIC_TUNNEL_URL
+METRICS_BACKEND_URL
+METRICS_AUTH_URL
+NEXT_PUBLIC_APP_VERSION
+"
+
+for VAR in $ENV_VARS; do
+  PLACEHOLDER="PLACEHOLDER_${VAR}"
+  VALUE=$(eval echo "\$$VAR")
+  if [ -n "$VALUE" ]; then
+    find /app/.next -type f -name "*.js" | xargs sed -i "s|${PLACEHOLDER}|${VALUE}|g"
+  fi
+done
+
+exec node server.js
