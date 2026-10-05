@@ -30,11 +30,13 @@ import {
   Type,
   Mail,
   Building2,
+  ScrollText,
+  Globe,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBranding } from '@/contexts/BrandingContext';
 import { brandingAPI } from '@/lib/branding-api';
-import { settingsAPI, S3Config } from '@/lib/settings-api';
+import { settingsAPI, S3Config, LogShippingConfig } from '@/lib/settings-api';
 import { profileAPI, ProfileData } from '@/lib/profile-api';
 import { apiKeysAPI, APIKeyInfo, MAX_API_KEYS } from '@/lib/api-keys-api';
 import { mfaSettingsAPI, MFASettings } from '@/lib/mfa-settings-api';
@@ -342,6 +344,21 @@ export default function SettingsPage() {
   const [brandingSaving, setBrandingSaving]   = useState(false);
 
   // ── Terminal Settings state (super_admin only) ────────────────
+  // ── Endpoint Logs: collecting each MACHINE's own system logs ──
+  const [lsLoading, setLsLoading] = useState(true);
+  const [lsSaving, setLsSaving] = useState(false);
+  const [lsArchiveConfigured, setLsArchiveConfigured] = useState(false);
+  const [ls, setLs] = useState<LogShippingConfig>({
+    enabled: false,
+    system_logs: true,
+    websites: true,
+    interval_seconds: 30,
+    daily_budget_mb: 256,
+    backfill_hours: 24,
+    include_info_debug: false,
+    keep_raw: false,
+  });
+
   const [terminalIdleTimeoutMinutes, setTerminalIdleTimeoutMinutes] = useState(2);
   const [terminalSettingsSaving, setTerminalSettingsSaving] = useState(false);
 
@@ -621,6 +638,51 @@ export default function SettingsPage() {
     } catch (err) {
       toast({ title: 'Failed', description: err instanceof Error ? err.message : 'Error', variant: 'destructive' });
     } finally { setProfileLoading(null); }
+  };
+
+  // ── Endpoint Logs: load and save the fleet-wide collection policy ──
+  const loadLogShipping = useCallback(async () => {
+    if (!token) return;
+    setLsLoading(true);
+    try {
+      const res = await settingsAPI.getLogShippingConfig(token);
+      setLs(res.settings);
+      setLsArchiveConfigured(res.archive_configured);
+    } catch (err) {
+      toast({
+        title: 'Could not load log collection settings',
+        description: err instanceof Error ? err.message : 'Error',
+        variant: 'destructive',
+      });
+    } finally {
+      setLsLoading(false);
+    }
+  }, [token, toast]);
+
+  const handleSaveLogShipping = async () => {
+    if (!token) return;
+    setLsSaving(true);
+    try {
+      const res = await settingsAPI.saveLogShippingConfig(token, ls);
+      // The counts are reported rather than a bare "Saved": offline machines
+      // keep their old policy until they reconnect, and a silent success would
+      // suggest the whole fleet had changed.
+      toast({
+        title: 'Log collection settings saved',
+        description:
+          res.agents_total === 0
+            ? 'No machines are enrolled yet.'
+            : `${res.agents_updated} of ${res.agents_total} machines updated now; the rest apply this when they reconnect.`,
+      });
+    } catch (err) {
+      toast({
+        title: 'Save failed',
+        description: err instanceof Error ? err.message : 'Error',
+        variant: 'destructive',
+      });
+    } finally {
+      setLsSaving(false);
+    }
   };
 
   // ── Log Management: save archive config + S3 recording ───────
@@ -970,7 +1032,7 @@ export default function SettingsPage() {
       <Tabs
         defaultValue="profile"
         onValueChange={v => {
-          if (v === 'log-management') loadLogManagement();
+          if (v === 'log-management') { loadLogManagement(); loadLogShipping(); }
         }}
       >
         <TabsList className="mb-6">
@@ -1366,7 +1428,7 @@ export default function SettingsPage() {
                 <CardContent className="space-y-6">
                   <div className="space-y-3">
                     <div className="flex flex-wrap gap-2">
-                      {[10, 20, 30].map(d => (
+                      {[5, 10, 20, 30].map(d => (
                         <button
                           key={d}
                           type="button"
@@ -1465,7 +1527,7 @@ export default function SettingsPage() {
                         <div className="space-y-3">
                           <Label className="text-base font-semibold">Archive Frequency</Label>
                           <div className="flex flex-wrap gap-2">
-                            {[10, 20, 30].map(d => (
+                            {[5, 10, 20, 30].map(d => (
                               <button key={d} type="button" onClick={() => { setArchiveEveryDays(d); setCustomFrequency(''); }} className={cn('px-4 py-2 rounded-lg border text-sm font-medium transition-all', archiveEveryDays === d ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/30 border-border/50 hover:border-primary/50')}>
                                 Every {d} days
                               </button>
@@ -1629,6 +1691,204 @@ export default function SettingsPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* ── Endpoint Log Collection ──────────────────────────────
+                Each MACHINE's own system logs and website activity. The
+                cards above govern the PORTAL's logs: what it keeps, and
+                where it archives them. These are a different source with a
+                different destination, which is why the heading says so.
+            ──────────────────────────────────────────────────────────── */}
+            {lsLoading ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />Loading…
+              </div>
+            ) : (
+              <>
+                {/* Collection has no effect without somewhere to put the logs,
+                    so that is said here rather than left to be discovered when
+                    the bucket turns out to be empty. */}
+                {ls.enabled && !lsArchiveConfigured && (
+                  <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+                    <div className="text-sm">
+                      <p className="font-medium">No archive destination is configured.</p>
+                      <p className="mt-1 text-muted-foreground">
+                        Agents will collect and upload, and the backend will discard every batch.
+                        Configure S3 Session Recording storage at the top of this page first — the
+                        endpoint logs go to the same bucket.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <Card className="glass-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <ScrollText className="w-5 h-5 text-primary" />Endpoint Log Collection
+                    </CardTitle>
+                    <CardDescription>
+                      Ships each machine&apos;s own system logs to your storage, so you can answer what
+                      happened on a laptop after the fact. Applies to every enrolled machine in the
+                      organisation. Windows and macOS only.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label className="text-base font-semibold">Collect endpoint logs</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Off by default. Machines that are offline apply a change when they reconnect.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={ls.enabled}
+                        onCheckedChange={v => setLs(prev => ({ ...prev, enabled: v }))}
+                      />
+                    </div>
+
+                    {ls.enabled && (
+                      <>
+                        <div className="space-y-4 border-t pt-5">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label className="flex items-center gap-2 font-medium">
+                                <HardDrive className="w-4 h-4 text-muted-foreground" />System logs
+                              </Label>
+                              <p className="text-xs text-muted-foreground">
+                                Windows Event Log (Security, System, Application, PowerShell, RDP and more)
+                                and the macOS unified log.
+                              </p>
+                            </div>
+                            <Switch
+                              checked={ls.system_logs}
+                              onCheckedChange={v => setLs(prev => ({ ...prev, system_logs: v }))}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label className="flex items-center gap-2 font-medium">
+                                <Globe className="w-4 h-4 text-muted-foreground" />Website activity
+                              </Label>
+                              <p className="text-xs text-muted-foreground">
+                                Domains the machine looked up, taken from DNS — so it covers every
+                                application, not only browsers. Domains, not full URLs, and a cached lookup
+                                leaves no record.
+                              </p>
+                            </div>
+                            <Switch
+                              checked={ls.websites}
+                              onCheckedChange={v => setLs(prev => ({ ...prev, websites: v }))}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid gap-5 border-t pt-5 sm:grid-cols-3">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="ls-budget">Daily limit per machine (MB)</Label>
+                            <Input
+                              id="ls-budget"
+                              type="number"
+                              min={-1}
+                              value={ls.daily_budget_mb}
+                              onChange={e => setLs(prev => ({ ...prev, daily_budget_mb: Number(e.target.value) }))}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Compressed. Default 256. A machine that hits the cap pauses until the next day
+                              and says so in its log. Use -1 for no limit.
+                            </p>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label htmlFor="ls-interval">Upload every (seconds)</Label>
+                            <Input
+                              id="ls-interval"
+                              type="number"
+                              min={10}
+                              max={3600}
+                              value={ls.interval_seconds}
+                              onChange={e => setLs(prev => ({ ...prev, interval_seconds: Number(e.target.value) }))}
+                            />
+                            <p className="text-xs text-muted-foreground">Default 30.</p>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label htmlFor="ls-backfill">Collect history on first run (hours)</Label>
+                            <Input
+                              id="ls-backfill"
+                              type="number"
+                              min={0}
+                              max={720}
+                              value={ls.backfill_hours}
+                              onChange={e => setLs(prev => ({ ...prev, backfill_hours: Number(e.target.value) }))}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Default 24. Bounds the first upload so an old machine does not ship its whole
+                              retained history at once.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4 border-t pt-5">
+                          <p className="text-sm font-medium">Verbosity</p>
+
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label className="font-medium">Include info and debug records</Label>
+                              {/* Worth stating plainly: this is the single
+                                  setting most likely to produce a surprising
+                                  bill. */}
+                              <p className="text-xs text-muted-foreground">
+                                Can increase a machine&apos;s volume by roughly ten times — on macOS these are
+                                most of what the OS writes. Leave off unless you are chasing something
+                                specific.
+                              </p>
+                            </div>
+                            <Switch
+                              checked={ls.include_info_debug}
+                              onCheckedChange={v => setLs(prev => ({ ...prev, include_info_debug: v }))}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label className="font-medium">Keep the original record</Label>
+                              <p className="text-xs text-muted-foreground">
+                                Roughly doubles volume. Errors and crashes keep their full detail either way,
+                                so this only adds it to routine records.
+                              </p>
+                            </div>
+                            <Switch
+                              checked={ls.keep_raw}
+                              onCheckedChange={v => setLs(prev => ({ ...prev, keep_raw: v }))}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg border bg-muted/40 p-4 text-xs text-muted-foreground">
+                          <p className="font-medium text-foreground">Where the logs land</p>
+                          <p className="mt-1 font-mono">
+                            organisation / group / machine / user / system-logs / YYYY / MM / DD
+                          </p>
+                          <p className="mt-2">
+                            Same layout as session recordings, stored as gzipped NDJSON. On macOS, hostnames
+                            in website activity are withheld by the OS unless private-data logging is enabled
+                            on the machine; the agent reports this in its own log when it sees it.
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <div className="flex items-center gap-3">
+                  <Button onClick={handleSaveLogShipping} disabled={lsSaving} className="gap-2">
+                    {lsSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    {lsSaving ? 'Saving…' : 'Save changes'}
+                  </Button>
+                </div>
+              </>
+            )}
 
           </TabsContent>
         )}
