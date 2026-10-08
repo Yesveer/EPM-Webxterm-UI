@@ -1,0 +1,515 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { Plus, Trash2, FlaskConical, Save, X, AlertTriangle, Cloud, Loader2 } from 'lucide-react';
+
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { SelectInput } from '@/components/FilterBar';
+import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/contexts/AuthContext';
+import { groupsAPI, Group } from '@/lib/user-management-api';
+import { machinesAPI, Machine } from '@/lib/machines-api';
+import {
+  AppPolicy,
+  PolicyRule,
+  PolicyAction,
+  PolicyScopeKind,
+  MatchOp,
+  criteriaAreEmpty,
+  emptyCriteria,
+} from '@/lib/policies-api';
+
+const ACTIONS: { value: PolicyAction; label: string; hint: string }[] = [
+  { value: 'block', label: 'Block', hint: 'Stop it running' },
+  { value: 'elevate', label: 'Elevate', hint: 'Run it with admin rights' },
+  { value: 'allow', label: 'Allow', hint: 'Explicitly permit it' },
+  { value: 'default', label: 'Exempt', hint: 'Skip the rules below and fall through' },
+];
+
+const OPS: { value: MatchOp; label: string }[] = [
+  { value: 'equals', label: 'is exactly' },
+  { value: 'contains', label: 'contains' },
+  { value: 'prefix', label: 'starts with' },
+  { value: 'suffix', label: 'ends with' },
+  { value: 'wildcard', label: 'matches pattern' },
+];
+
+interface Props {
+  policy: AppPolicy;
+  onCancel: () => void;
+  onSave: (policy: AppPolicy) => void;
+  onSimulate: (policy: AppPolicy) => void;
+  simulating: boolean;
+}
+
+export default function PolicyEditor({ policy, onCancel, onSave, onSimulate, simulating }: Props) {
+  const [draft, setDraft] = useState<AppPolicy>({ ...policy, rules: [...(policy.rules ?? [])] });
+
+  const update = (patch: Partial<AppPolicy>) => setDraft(prev => ({ ...prev, ...patch }));
+
+  const updateRule = (index: number, patch: Partial<PolicyRule>) =>
+    setDraft(prev => ({
+      ...prev,
+      rules: prev.rules.map((r, i) => (i === index ? { ...r, ...patch } : r)),
+    }));
+
+  const addRule = () =>
+    setDraft(prev => ({
+      ...prev,
+      rules: [
+        ...prev.rules,
+        {
+          id: '',
+          name: '',
+          enabled: true,
+          action: 'block' as PolicyAction,
+          match: emptyCriteria(),
+        },
+      ],
+    }));
+
+  const removeRule = (index: number) =>
+    setDraft(prev => ({ ...prev, rules: prev.rules.filter((_, i) => i !== index) }));
+
+  const move = (index: number, delta: number) => {
+    const to = index + delta;
+    if (to < 0 || to >= draft.rules.length) return;
+    const rules = [...draft.rules];
+    [rules[index], rules[to]] = [rules[to], rules[index]];
+    setDraft(prev => ({ ...prev, rules }));
+  };
+
+  // A rule with no criteria matches nothing. The backend rejects it, but
+  // saying so here means the operator is not left looking at a rule that
+  // silently does nothing.
+  const emptyRules = draft.rules
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => criteriaAreEmpty(r.match));
+  const nameMissing = draft.name.trim() === '';
+  // A scope that names no groups or machines applies to nobody. The backend
+  // rejects it; saying so here saves a round trip and explains why.
+  const scopeEmpty =
+    (draft.scope.kind === 'group' && (draft.scope.group_ids?.length ?? 0) === 0) ||
+    (draft.scope.kind === 'machine' && (draft.scope.agent_ids?.length ?? 0) === 0);
+  const canSave = !nameMissing && !scopeEmpty && emptyRules.length === 0;
+
+  return (
+    <Card className="glass-card">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle>{policy.id ? 'Edit policy' : 'New policy'}</CardTitle>
+            <CardDescription className="mt-1">
+              Rules are evaluated top to bottom and the first one that matches decides. Put
+              exceptions above the broad rules they carve out of.
+            </CardDescription>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onCancel} aria-label="Close">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-6">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="policy-name">Name</Label>
+            <Input
+              id="policy-name"
+              value={draft.name}
+              onChange={e => update({ name: e.target.value })}
+              placeholder="Block games on finance laptops"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="policy-default">If no rule matches</Label>
+            <SelectInput
+              id="policy-default"
+              value={draft.default_action}
+              onChange={v => update({ default_action: v as PolicyAction })}
+            >
+              <option value="allow">Allow (recommended)</option>
+              <option value="block">Block everything else</option>
+            </SelectInput>
+            {draft.default_action === 'block' && (
+              // Allow-listing is a legitimate posture and a very large hammer.
+              <p className="text-xs text-amber-500">
+                This is an allow-list: anything your rules do not permit would be blocked.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="policy-description">Description</Label>
+          <Textarea
+            id="policy-description"
+            value={draft.description ?? ''}
+            onChange={e => update({ description: e.target.value })}
+            placeholder="Why this policy exists, so the next person knows whether they may change it."
+            rows={2}
+          />
+        </div>
+
+        <ScopePicker
+          scope={draft.scope}
+          onChange={scope => update({ scope })}
+        />
+
+        <div className="flex items-center justify-between rounded-lg border border-border/60 p-3">
+          <div className="space-y-0.5">
+            <Label className="font-medium">Enabled</Label>
+            <p className="text-xs text-muted-foreground">
+              A disabled policy is kept but contributes nothing.
+            </p>
+          </div>
+          <Switch checked={draft.enabled} onCheckedChange={v => update({ enabled: v })} />
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-base font-semibold">Rules</Label>
+            <Button variant="outline" size="sm" onClick={addRule} className="gap-1.5">
+              <Plus className="h-3.5 w-3.5" />
+              Add rule
+            </Button>
+          </div>
+
+          {draft.rules.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
+              No rules yet. A policy with no rules does nothing.
+            </p>
+          ) : (
+            draft.rules.map((rule, i) => (
+              <RuleEditor
+                key={i}
+                index={i}
+                rule={rule}
+                total={draft.rules.length}
+                isEmpty={criteriaAreEmpty(rule.match)}
+                onChange={patch => updateRule(i, patch)}
+                onRemove={() => removeRule(i)}
+                onMove={delta => move(i, delta)}
+              />
+            ))
+          )}
+        </div>
+
+        {emptyRules.length > 0 && (
+          <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+            <div className="text-sm">
+              <p className="font-medium">
+                {emptyRules.length === 1 ? 'One rule has' : `${emptyRules.length} rules have`} no
+                criteria.
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                A rule with nothing filled in matches nothing — it is never treated as “everything”.
+                Fill in at least one field, or remove{' '}
+                {emptyRules.length === 1 ? 'the rule' : 'them'}.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button onClick={() => onSave(draft)} disabled={!canSave} className="gap-2">
+            <Save className="h-4 w-4" />
+            Save policy
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => onSimulate(draft)}
+            disabled={simulating || draft.rules.length === 0}
+            className="gap-2"
+          >
+            <FlaskConical className="h-4 w-4" />
+            Project impact
+          </Button>
+          <Button variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+          {nameMissing && <span className="text-xs text-muted-foreground">A name is required.</span>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RuleEditor({
+  index,
+  rule,
+  total,
+  isEmpty,
+  onChange,
+  onRemove,
+  onMove,
+}: {
+  index: number;
+  rule: PolicyRule;
+  total: number;
+  isEmpty: boolean;
+  onChange: (patch: Partial<PolicyRule>) => void;
+  onRemove: () => void;
+  onMove: (delta: number) => void;
+}) {
+  const field = (
+    key: 'app_name' | 'publisher' | 'file_path' | 'bundle_id',
+    label: string,
+    placeholder: string,
+  ) => {
+    const m = rule.match[key] ?? {};
+    return (
+      <div className="space-y-1.5">
+        <Label className="text-xs">{label}</Label>
+        <div className="flex gap-2">
+          <SelectInput
+            aria-label={`${label} match type`}
+            value={m.op ?? 'equals'}
+            onChange={v => onChange({ match: { ...rule.match, [key]: { ...m, op: v as MatchOp } } })}
+            className="h-9 w-36 shrink-0 text-xs"
+          >
+            {OPS.map(o => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </SelectInput>
+          <Input
+            value={(m.values ?? []).join(', ')}
+            placeholder={placeholder}
+            onChange={e =>
+              onChange({
+                match: {
+                  ...rule.match,
+                  [key]: {
+                    ...m,
+                    // Comma-separated values are ORed, so one rule can name
+                    // several products without needing several rules.
+                    values: e.target.value
+                      .split(',')
+                      .map(v => v.trim())
+                      .filter(Boolean),
+                  },
+                },
+              })
+            }
+            className="h-9 text-sm"
+          />
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div
+      className={`space-y-3 rounded-lg border p-4 ${
+        isEmpty ? 'border-amber-500/40 bg-amber-500/5' : 'border-border/60'
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-xs font-medium text-muted-foreground">#{index + 1}</span>
+
+        <Input
+          value={rule.name}
+          onChange={e => onChange({ name: e.target.value })}
+          placeholder="What this rule is for"
+          className="h-9 max-w-xs text-sm"
+        />
+
+        <SelectInput
+          aria-label="Rule action"
+          value={rule.action}
+          onChange={v => onChange({ action: v as PolicyAction })}
+          className="h-9 w-auto min-w-[14rem] text-sm"
+        >
+          {ACTIONS.map(a => (
+            <option key={a.value} value={a.value}>
+              {a.label} — {a.hint}
+            </option>
+          ))}
+        </SelectInput>
+
+        <div className="ml-auto flex items-center gap-1">
+          <Button variant="ghost" size="sm" disabled={index === 0} onClick={() => onMove(-1)}>
+            ↑
+          </Button>
+          <Button variant="ghost" size="sm" disabled={index === total - 1} onClick={() => onMove(1)}>
+            ↓
+          </Button>
+          <Switch checked={rule.enabled} onCheckedChange={v => onChange({ enabled: v })} />
+          <Button variant="ghost" size="icon" onClick={onRemove} aria-label="Remove rule">
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {field('app_name', 'Application name', 'Steam, Epic Games Launcher')}
+        {field('publisher', 'Publisher', 'Valve Corporation')}
+        {field('file_path', 'Path', 'C:\\Program Files\\Steam')}
+        {field('bundle_id', 'Bundle ID (macOS)', 'com.valvesoftware.steam')}
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Fields you fill in must all match; values within one field are alternatives.
+      </p>
+    </div>
+  );
+}
+
+/** Chooses which machines a policy applies to.
+ *
+ *  Group scoping is what makes a directory sync worth having: an operator
+ *  writes one policy against "Finance" and membership is maintained in Entra,
+ *  rather than here by hand. */
+export function ScopePicker({
+  scope,
+  onChange,
+}: {
+  scope: AppPolicy['scope'];
+  onChange: (scope: AppPolicy['scope']) => void;
+}) {
+  const { token } = useAuth();
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [machines, setMachines] = useState<Machine[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const [g, m] = await Promise.all([
+        groupsAPI.listGroups(token, { limit: 200 }),
+        machinesAPI.listMachines(token, { limit: 500 }),
+      ]);
+      setGroups(g.groups ?? []);
+      setMachines(m.machines ?? []);
+    } catch {
+      // A picker that cannot load its options is still usable for tenant
+      // scope, which is the default — so this is not worth an error banner.
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (scope.kind !== 'tenant') load();
+  }, [scope.kind, load]);
+
+  const setKind = (kind: PolicyScopeKind) => {
+    // Targets are cleared on a change of kind so a policy cannot carry a stale
+    // list that becomes live again if somebody switches back.
+    onChange({ kind, group_ids: [], agent_ids: [] });
+  };
+
+  const toggle = (list: string[] | undefined, id: string): string[] => {
+    const current = list ?? [];
+    return current.includes(id) ? current.filter(x => x !== id) : [...current, id];
+  };
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border/60 p-4">
+      <Label className="text-base font-semibold">Applies to</Label>
+
+      <div className="flex flex-wrap gap-2">
+        {([
+          ['tenant', 'All machines'],
+          ['group', 'Groups'],
+          ['machine', 'Specific machines'],
+        ] as [PolicyScopeKind, string][]).map(([kind, label]) => (
+          <button
+            key={kind}
+            type="button"
+            onClick={() => setKind(kind)}
+            className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
+              scope.kind === kind
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-border/50 bg-muted/30 hover:border-primary/50'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {loading && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading…
+        </div>
+      )}
+
+      {scope.kind === 'group' && !loading && (
+        <div className="space-y-2">
+          {groups.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No groups yet. Create them under Organisation Management, or turn on Microsoft Entra
+              sync in Settings → Directory to bring your existing ones across.
+            </p>
+          ) : (
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {groups.map(group => (
+                <label
+                  key={group.id}
+                  className="flex cursor-pointer items-center gap-2 rounded-md border border-border/50 px-3 py-2 text-sm hover:bg-muted/40"
+                >
+                  <input
+                    type="checkbox"
+                    checked={(scope.group_ids ?? []).includes(group.id)}
+                    onChange={() => onChange({ ...scope, group_ids: toggle(scope.group_ids, group.id) })}
+                  />
+                  <span className="flex-1">{group.name}</span>
+                  {group.entra_group_id && (
+                    // Worth showing: membership of a synced group is
+                    // maintained in Entra, so editing it here is overwritten.
+                    <Badge variant="outline" className="gap-1 text-[10px]">
+                      <Cloud className="h-3 w-3" />
+                      Entra
+                    </Badge>
+                  )}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {scope.kind === 'machine' && !loading && (
+        <div className="grid max-h-64 gap-1.5 overflow-y-auto sm:grid-cols-2">
+          {machines.map(machine => (
+            <label
+              key={machine.agent_id || machine.id}
+              className="flex cursor-pointer items-center gap-2 rounded-md border border-border/50 px-3 py-2 text-sm hover:bg-muted/40"
+            >
+              <input
+                type="checkbox"
+                checked={(scope.agent_ids ?? []).includes(machine.agent_id)}
+                onChange={() => onChange({ ...scope, agent_ids: toggle(scope.agent_ids, machine.agent_id) })}
+                disabled={!machine.agent_id}
+              />
+              <span className="flex-1">{machine.name}</span>
+              <span className="text-xs text-muted-foreground">{machine.os}</span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {scope.kind === 'group' && (scope.group_ids?.length ?? 0) === 0 && (
+        <p className="text-xs text-amber-500">
+          Pick at least one group, or this policy applies to nobody.
+        </p>
+      )}
+      {scope.kind === 'machine' && (scope.agent_ids?.length ?? 0) === 0 && (
+        <p className="text-xs text-amber-500">
+          Pick at least one machine, or this policy applies to nobody.
+        </p>
+      )}
+    </div>
+  );
+}

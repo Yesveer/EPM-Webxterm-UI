@@ -24,6 +24,10 @@ export interface Group {
   keycloak_id: string;
   member_ids: string[];
   machine_ids: string[];
+  /** Set when the group came from Microsoft Entra. Its membership is replaced
+   *  on every sync, so editing it here would be overwritten. */
+  entra_group_id?: string;
+  directory_source?: string;
   created_at: string;
   updated_at: string;
 }

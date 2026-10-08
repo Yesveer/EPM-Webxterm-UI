@@ -30,6 +30,7 @@ import {
   Type,
   Mail,
   Building2,
+  Users,
   ScrollText,
   Globe,
 } from 'lucide-react';
@@ -37,6 +38,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useBranding } from '@/contexts/BrandingContext';
 import { brandingAPI } from '@/lib/branding-api';
 import { settingsAPI, S3Config, LogShippingConfig } from '@/lib/settings-api';
+import EntraSyncSettings from '@/components/EntraSyncSettings';
 import { profileAPI, ProfileData } from '@/lib/profile-api';
 import { apiKeysAPI, APIKeyInfo, MAX_API_KEYS } from '@/lib/api-keys-api';
 import { mfaSettingsAPI, MFASettings } from '@/lib/mfa-settings-api';
@@ -1044,6 +1046,11 @@ export default function SettingsPage() {
               <Archive className="w-4 h-4" />Log Management
             </TabsTrigger>
           )}
+          {isAdmin && (
+            <TabsTrigger value="directory" className="gap-2">
+              <Users className="w-4 h-4" />Directory
+            </TabsTrigger>
+          )}
           {isSuperAdmin && (
             <TabsTrigger value="theme-config" className="gap-2">
               <Palette className="w-4 h-4" />Theme
@@ -1890,6 +1897,19 @@ export default function SettingsPage() {
               </>
             )}
 
+          </TabsContent>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════
+            Directory Tab  (admin)
+
+            Microsoft Entra synchronisation. Lives beside the other
+            organisation-wide settings because it governs who exists here at
+            all, which everything else depends on.
+        ══════════════════════════════════════════════════════════ */}
+        {isAdmin && (
+          <TabsContent value="directory" className="space-y-6">
+            <EntraSyncSettings token={token} />
           </TabsContent>
         )}
 

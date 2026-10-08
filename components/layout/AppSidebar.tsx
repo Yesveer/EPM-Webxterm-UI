@@ -9,9 +9,10 @@ import {
   BookOpen,
   Users,
   Package,
+  Boxes,
   Settings,
   ClipboardList,
-  // ShieldCheck,   // EPM: Access Requests disabled — re-enable later
+  ShieldCheck,
   SlidersHorizontal,
   BarChart2,
   Building2,
@@ -76,9 +77,11 @@ const mainNavItems: NavItem[] = [
   { title: 'Machines', href: '/machines', icon: Monitor },
   // EPM: Access Requests disabled — re-enable later
   // { title: 'Access Requests', href: '/access-requests', icon: ShieldCheck, roles: ['super_admin', 'company_admin'] },
+  { title: 'Applications', href: '/applications', icon: Boxes, roles: ['super_admin', 'company_admin'] },
+  { title: 'Policies', href: '/policies', icon: ShieldCheck, roles: ['super_admin', 'company_admin'] },
   { title: 'Packages', href: '/packages', icon: Package },
   { title: 'Organisation Management', href: '/user-management', icon: Settings, roles: ['super_admin', 'company_admin'] },
-  { title: 'Audit Logs', href: '/audit-logs', icon: ClipboardList, roles: ['super_admin', 'company_admin'] },
+  { title: 'Audit & Reporting', href: '/audit-logs', icon: ClipboardList, roles: ['super_admin', 'company_admin'] },
   { title: 'Settings', href: '/settings', icon: SlidersHorizontal, roles: ['super_admin', 'company_admin'] },
   { title: 'Metrics', href: '/metrics', icon: BarChart2, roles: ['super_admin'] },
 ];

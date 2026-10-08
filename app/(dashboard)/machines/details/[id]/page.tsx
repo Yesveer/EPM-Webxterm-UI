@@ -57,6 +57,7 @@ import {
   Play,
   Maximize2,
   ShieldAlert,
+  Package,
   Clock,
   HardDrive as HardDriveIcon,
   CheckCircle2,
@@ -92,6 +93,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import MachineApplications from '@/components/MachineApplications';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBranding } from '@/contexts/BrandingContext';
@@ -1219,6 +1221,10 @@ export default function MachineDetails() {
           <TabsTrigger value="logs" className="gap-2">
             <FileText className="w-4 h-4" />
             Logs
+          </TabsTrigger>
+          <TabsTrigger value="applications" className="gap-2">
+            <Package className="w-4 h-4" />
+            Applications
           </TabsTrigger>
           <TabsTrigger value="security" className="gap-2">
             <ShieldAlert className="w-4 h-4" />
@@ -2414,6 +2420,15 @@ export default function MachineDetails() {
         </TabsContent>
 
         {/* Security Tab — external SSH/RDP access history */}
+        {/* Applications Tab — what software this machine reports.
+            Mounted only when selected: the component fetches on mount, and
+            there is no reason to pull an inventory for a tab nobody opened. */}
+        <TabsContent value="applications" className="space-y-6">
+          {activeTab === 'applications' && (
+            <MachineApplications token={token} agentId={machine?.agent_id} />
+          )}
+        </TabsContent>
+
         <TabsContent value="security" className="space-y-6">
           <Card className="glass-card">
             <CardHeader>

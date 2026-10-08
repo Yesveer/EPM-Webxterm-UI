@@ -1,10 +1,15 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Search, RefreshCw, ChevronDown, User, Clock, Monitor, Globe, AlertCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Search, RefreshCw, ChevronDown, User, Clock, Monitor, Globe, AlertCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ClipboardCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { auditAPI, AuditLog, TenantOption } from '@/lib/audit-api';
 import { Breadcrumb } from '@/components/ui/page-breadcrumb';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import EndpointAuditEvents from '@/components/EndpointAuditEvents';
+import ComplianceReportView from '@/components/ComplianceReport';
+import { TabHeader } from '@/components/TabHeader';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
@@ -34,7 +39,56 @@ function formatTime(ts: string) {
   });
 }
 
+/** Three views over the same question — what happened, and can we prove it.
+ *
+ *  Portal actions and endpoint events are kept apart rather than merged: they
+ *  have different actors, different retention and different services behind
+ *  them, and a single list would make both harder to trust. */
 export default function AuditLogsPage() {
+  return (
+    <div className="space-y-6">
+      <Breadcrumb items={[{ label: 'Audit & Reporting' }]} />
+
+      <div>
+        <h1 className="text-2xl font-bold">Audit &amp; Reporting</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          What happened across your fleet, and the evidence for it.
+        </p>
+      </div>
+
+      <Tabs defaultValue="endpoint">
+        <TabsList className="mb-6">
+          <TabsTrigger value="endpoint" className="gap-2">
+            <Monitor className="h-4 w-4" />
+            Endpoint Events
+          </TabsTrigger>
+          <TabsTrigger value="portal" className="gap-2">
+            <User className="h-4 w-4" />
+            Portal Actions
+          </TabsTrigger>
+          <TabsTrigger value="report" className="gap-2">
+            <ClipboardCheck className="h-4 w-4" />
+            Compliance Report
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="endpoint">
+          <EndpointAuditEvents />
+        </TabsContent>
+
+        <TabsContent value="portal">
+          <PortalActionsLog />
+        </TabsContent>
+
+        <TabsContent value="report">
+          <ComplianceReportView />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function PortalActionsLog() {
   const { user, token } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
 
@@ -138,23 +192,24 @@ export default function AuditLogsPage() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumb items={[{ label: 'Audit Logs' }]} />
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Audit Logs</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            {isSuperAdmin ? 'View activity across all tenants' : `Activity in ${user?.tenant_name}`}
-          </p>
-        </div>
-        <button
-          onClick={() => fetchLogs(page, pageSize, isSuperAdmin ? selectedTenant || undefined : undefined)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-accent transition-colors text-sm"
-        >
-          <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-          Refresh
-        </button>
-      </div>
+      <TabHeader
+        description={
+          'Sign-ins, user management and other portal activity' +
+          (isSuperAdmin ? ' across all tenants.' : ` in ${user?.tenant_name}.`)
+        }
+        action={
+          // The same Button the other tabs use, so the control is the same
+          // size and sits at the same height across the page.
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={() => fetchLogs(page, pageSize, isSuperAdmin ? selectedTenant || undefined : undefined)}
+          >
+            <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+            Refresh
+          </Button>
+        }
+      />
 
       {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-3">
