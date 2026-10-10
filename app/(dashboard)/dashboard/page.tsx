@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Monitor, Activity, AlertCircle, Server, Clock, ArrowUpRight, Terminal } from 'lucide-react';
 import { Breadcrumb } from '@/components/ui/page-breadcrumb';
 import { StatCard } from '@/components/ui/StatCard';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -94,10 +95,18 @@ export default function DashboardPage() {
     <div className="animate-fade-in">
       <Breadcrumb items={[{ label: 'Dashboard' }]} className="mb-6" />
 
-      <div className="page-header">
-        <h1 className="page-title">Dashboard</h1>
-        <p className="page-description">Overview of your server infrastructure</p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Privilege activity across your managed endpoints."
+        action={
+          <Button asChild variant="outline">
+            <Link href="/machines">
+              <Monitor className="mr-2 h-4 w-4" />
+              View machines
+            </Link>
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard
@@ -242,13 +251,13 @@ export default function DashboardPage() {
               </Link>
             </Button>
             <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-              <Link href={Community_URL || 'https://community.webxterm.me'} target="_blank" rel="noopener noreferrer">
+              <Link href={Community_URL || 'https://community.coredge.io'} target="_blank" rel="noopener noreferrer">
                 <AlertCircle className="w-5 h-5" />
                 <span className="text-sm">Report Issue</span>
               </Link>
             </Button>
             <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-              <Link href={Documentation_URL || 'https://docs.webxterm.me'} target="_blank" rel="noopener noreferrer">
+              <Link href={Documentation_URL || 'https://docs.coredge.io'} target="_blank" rel="noopener noreferrer">
                 <Server className="w-5 h-5" />
                 <span className="text-sm">View Docs</span>
               </Link>

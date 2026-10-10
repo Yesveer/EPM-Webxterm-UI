@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Terminal, Loader2, Mail, Lock, Building2, ChevronRight, Shield, Zap, Globe } from 'lucide-react';
+import { Eye, EyeOff, ShieldCheck, Loader2, Mail, Lock, Building2, ChevronRight, Shield, Zap, Laptop } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBranding } from '@/contexts/BrandingContext';
+import { BrandName } from '@/components/BrandMark';
+import { PolicyDecisionStream } from '@/components/PolicyDecisionStream';
 import { authAPI, TenantInfo, getOIDCLoginURL } from '@/lib/auth-api';
 import { oidcProvidersAPI, OIDCProviders } from '@/lib/oidc-settings-api';
 import { cn } from '@/lib/utils';
@@ -32,113 +34,6 @@ function FloatingOrb({ size, x, y, delay }: { size: number; x: string; y: string
   );
 }
 
-// ─── Animated typing terminal ─────────────────────────────────────────────────
-const termLines = [
-  { text: '$ vsay-shell-cli login https://console.webxterm.me', color: 'green', delay: 400 },
-  { text: '✓ Authenticated as admin@company.com',               color: 'primary', delay: 300 },
-  { text: '$ vsay-shell-cli list',                              color: 'green',   delay: 500 },
-  { text: 'prod-server-01   online    linux    amd64',          color: 'muted',   delay: 150 },
-  { text: 'dev-laptop       online    macos    arm64',          color: 'muted',   delay: 100 },
-  { text: '$ vsay-shell-cli connect prod-server-01',            color: 'green',   delay: 600 },
-  { text: '✓ Connected via TLS 1.3 — session started',         color: 'primary', delay: 350 },
-];
-
-function AnimatedTerminal() {
-  const [displayedLines, setDisplayedLines] = useState<{ text: string; color: string }[]>([]);
-  const [currentLine, setCurrentLine]       = useState(0);
-  const [currentChar, setCurrentChar]       = useState(0);
-  const [showCursor,  setShowCursor]        = useState(true);
-
-  // Character-by-character typing (exact same logic as WebXTerm-next TypingAnimation)
-  useEffect(() => {
-    if (currentLine >= termLines.length) return;
-    const line  = termLines[currentLine];
-    const delay = currentChar === 0 ? (line.delay ?? 0) : 36;
-
-    const timer = setTimeout(() => {
-      if (currentChar < line.text.length) {
-        setDisplayedLines(prev => {
-          const next = [...prev];
-          if (next.length <= currentLine) next.push({ text: '', color: line.color });
-          next[currentLine] = { text: line.text.slice(0, currentChar + 1), color: line.color };
-          return next;
-        });
-        setCurrentChar(c => c + 1);
-      } else {
-        setCurrentLine(l => l + 1);
-        setCurrentChar(0);
-      }
-    }, delay);
-
-    return () => clearTimeout(timer);
-  }, [currentLine, currentChar]);
-
-  // Blinking cursor
-  useEffect(() => {
-    const id = setInterval(() => setShowCursor(c => !c), 530);
-    return () => clearInterval(id);
-  }, []);
-
-  const colorClass = (color: string) => {
-    switch (color) {
-      case 'green':   return 'text-[hsl(var(--terminal-text))]';
-      case 'primary': return 'text-primary';
-      case 'muted':   return 'text-muted-foreground/70';
-      default:        return 'text-foreground';
-    }
-  };
-
-  return (
-    <div className="terminal-bg rounded-xl border border-border/20 p-5 font-mono text-sm mt-10">
-      {/* Window chrome */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-3 h-3 rounded-full bg-destructive" />
-        <div className="w-3 h-3 rounded-full bg-warning" />
-        <div className="w-3 h-3 rounded-full bg-success" />
-        <span className="ml-2 text-xs text-muted-foreground/60 font-mono">webxterm — shell</span>
-        <motion.div
-          animate={{ opacity: [1, 0.3, 1] }}
-          transition={{ duration: 1.8, repeat: Infinity }}
-          className="ml-auto flex items-center gap-1.5"
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-success" />
-          <span className="text-[10px] font-mono text-success/80">LIVE</span>
-        </motion.div>
-      </div>
-
-      {/* Lines */}
-      <div className="space-y-1">
-        {displayedLines.map((line, i) => (
-          <div key={i} className={colorClass(line.color)}>
-            {line.text}
-          </div>
-        ))}
-
-        {/* Typing cursor on active line */}
-        {currentLine < termLines.length && (
-          <span
-            className={`inline-block w-2 h-[1em] bg-primary align-middle ml-0.5 ${
-              showCursor ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
-        )}
-
-        {/* Idle cursor after all lines */}
-        {currentLine >= termLines.length && (
-          <div className="text-[hsl(var(--terminal-text))]">
-            admin@prod-server-01:~${' '}
-            <span
-              className={`inline-block w-2 h-[1em] bg-primary align-middle ml-0.5 ${
-                showCursor ? 'opacity-100' : 'opacity-0'
-              }`}
-            />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function LoginPage() {
   const [step, setStep] = useState<LoginStep>('credentials');
@@ -158,7 +53,10 @@ export default function LoginPage() {
   }, []);
 
   const { login } = useAuth();
-  const { branding } = useBranding();
+  // `resolved` gates every rendering of the NAME: until the org's config has
+  // arrived, the defaults in `branding` are a guess, and painting them first
+  // is what made the stock name flicker on screen before the real one.
+  const { branding, resolved: brandingResolved } = useBranding();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -301,11 +199,11 @@ export default function LoginPage() {
                 <img src={branding.logo_url} alt="" className="relative w-12 h-12 object-contain" />
               ) : (
                 <div className="relative flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-primary-foreground shadow-lg">
-                  <Terminal className="w-6 h-6" />
+                  <ShieldCheck className="w-6 h-6" />
                 </div>
               )}
             </div>
-            <span className="text-4xl font-extrabold tracking-tight">
+            <span className={cn('text-4xl font-extrabold tracking-tight', !brandingResolved && 'invisible')}>
               <span>{branding.name_part1}</span>
               <span className="text-primary">{branding.name_part2}</span>
             </span>
@@ -323,7 +221,7 @@ export default function LoginPage() {
               transition={{ duration: 2, repeat: Infinity }}
               className="w-1.5 h-1.5 rounded-full bg-primary"
             />
-            Secure Remote Access & PAM Solution
+            Endpoint Privilege Management
           </motion.div>
 
           {/* Headline */}
@@ -333,12 +231,13 @@ export default function LoginPage() {
             transition={{ duration: 0.6, delay: 0.3 }}
           >
             <h1 className="text-4xl xl:text-5xl font-bold leading-tight mb-5">
-              Secure SSH Access<br />
-              <span className="gradient-text">Made Simple</span>
+              Endpoint Privilege<br />
+              <span className="gradient-text">Management</span>
             </h1>
             <p className="text-base text-muted-foreground max-w-md leading-relaxed">
-              Manage servers, run commands, and monitor your entire infrastructure
-              from a single dashboard — browser, CLI, or IDE.
+              Take away standing admin rights without taking away the work. Applications
+              are inventoried, policies decide what may elevate, and every decision is
+              recorded.
             </p>
           </motion.div>
 
@@ -348,7 +247,7 @@ export default function LoginPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.5 }}
           >
-            <AnimatedTerminal />
+            <PolicyDecisionStream />
           </motion.div>
 
           {/* Trust chips */}
@@ -359,9 +258,9 @@ export default function LoginPage() {
             className="flex flex-wrap gap-2.5 mt-8"
           >
             {[
-              { icon: Zap,    text: 'Zero open ports' },
-              { icon: Shield, text: 'TLS 1.3 encrypted' },
-              { icon: Globe,  text: 'Linux · macOS · Windows' },
+              { icon: Shield, text: 'No standing admin rights' },
+              { icon: Zap,    text: 'Just-in-time elevation' },
+              { icon: Laptop, text: 'Windows · macOS · Linux' },
             ].map((chip, i) => (
               <motion.div
                 key={chip.text}
@@ -411,11 +310,11 @@ export default function LoginPage() {
                 <img src={branding.logo_url} alt="" className="relative w-10 h-10 object-contain" />
               ) : (
                 <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground">
-                  <Terminal className="w-5 h-5" />
+                  <ShieldCheck className="w-5 h-5" />
                 </div>
               )}
             </div>
-            <span className="text-3xl font-extrabold tracking-tight">
+            <span className={cn('text-3xl font-extrabold tracking-tight', !brandingResolved && 'invisible')}>
               <span>{branding.name_part1}</span>
               <span className="text-primary">{branding.name_part2}</span>
             </span>
@@ -440,7 +339,9 @@ export default function LoginPage() {
                     transition={{ duration: 0.4, delay: 0.1 }}
                   >
                     <h2 className="text-2xl font-bold">Welcome back</h2>
-                    <p className="text-muted-foreground mt-2 text-sm">Sign in to your WebXTerm account</p>
+                    <p className="text-muted-foreground mt-2 text-sm">
+                      Sign in to your <BrandName /> account
+                    </p>
                   </motion.div>
                 </div>
 

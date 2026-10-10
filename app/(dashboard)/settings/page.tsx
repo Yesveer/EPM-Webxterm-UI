@@ -877,7 +877,7 @@ export default function SettingsPage() {
   const handleResetBranding = () => {
     openConfirm({
       title: 'Reset to default branding?',
-      description: 'This clears the logo, favicon, custom name, and colour — everyone will see the original WebXterm look again.',
+      description: 'This clears the logo, favicon, custom name, and colour — everyone will see the original EPM look again.',
       confirmLabel: 'Reset',
       destructive: true,
       onConfirm: async () => {
@@ -899,7 +899,7 @@ export default function SettingsPage() {
           setNamePart2(updated.name_part2);
           setDefaultThemeColor(updated.default_theme_color);
           setGlobalBranding(updated);
-          toast({ title: 'Branding reset', description: 'Everyone now sees the default WebXterm look.' });
+          toast({ title: 'Branding reset', description: 'Everyone now sees the default EPM look.' });
         } catch (err) {
           toast({ title: 'Reset failed', description: err instanceof Error ? err.message : 'Error', variant: 'destructive' });
         } finally {
@@ -2026,7 +2026,7 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Type className="w-5 h-5 text-primary" />Product Name</CardTitle>
                 <CardDescription>
-                  Split into two parts — shown everywhere &quot;WebXterm&quot; appears today. Leave either part
+                  Split into two parts — shown everywhere &quot;EPM&quot; appears today. Leave either part
                   blank to put the whole name in the other one. Part 1 uses the normal text colour, Part 2
                   always follows the Default Theme Colour below.
                 </CardDescription>

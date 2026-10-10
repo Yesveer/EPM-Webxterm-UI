@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Loader2, Mail, Lock, User, Building, UserCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { BrandMark } from '@/components/BrandMark';
+import { BrandMark, BrandName } from '@/components/BrandMark';
 import { authAPI, getOIDCLoginURL } from '@/lib/auth-api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -140,12 +140,12 @@ export default function SignupPage() {
             />
           </div>
           <h1 className="text-4xl xl:text-5xl font-bold leading-tight mb-6">
-            Start Managing<br />
-            <span className="gradient-text">Your Infrastructure</span>
+            Least Privilege<br />
+            <span className="gradient-text">Across Every Endpoint</span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-md">
-            Create your account to access powerful server management tools
-            and streamline your DevOps workflow.
+            Create your account to inventory what your fleet runs, decide what may
+            elevate, and keep a record of every decision.
           </p>
 
           {/* Benefits List */}
@@ -155,8 +155,8 @@ export default function SignupPage() {
                 <div className="w-2 h-2 rounded-full bg-primary" />
               </div>
               <div>
-                <h3 className="font-semibold">Multi-tenant Support</h3>
-                <p className="text-sm text-muted-foreground">Manage multiple organizations and teams</p>
+                <h3 className="font-semibold">Application Inventory</h3>
+                <p className="text-sm text-muted-foreground">See exactly what is installed, on every machine</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -164,8 +164,8 @@ export default function SignupPage() {
                 <div className="w-2 h-2 rounded-full bg-primary" />
               </div>
               <div>
-                <h3 className="font-semibold">Role-Based Access</h3>
-                <p className="text-sm text-muted-foreground">Fine-grained permissions and security</p>
+                <h3 className="font-semibold">Elevation Policies</h3>
+                <p className="text-sm text-muted-foreground">Allow, block or elevate by app, publisher or group</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -173,8 +173,8 @@ export default function SignupPage() {
                 <div className="w-2 h-2 rounded-full bg-primary" />
               </div>
               <div>
-                <h3 className="font-semibold">Comprehensive Audit Logs</h3>
-                <p className="text-sm text-muted-foreground">Track all actions and changes</p>
+                <h3 className="font-semibold">Full Audit Trail</h3>
+                <p className="text-sm text-muted-foreground">Every request, decision and session, exportable</p>
               </div>
             </div>
           </div>
@@ -197,7 +197,9 @@ export default function SignupPage() {
 
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold">Create your account</h2>
-            <p className="text-muted-foreground mt-2">Set up your organization and get started</p>
+            <p className="text-muted-foreground mt-2">
+              Set up your organization and get started with <BrandName />
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

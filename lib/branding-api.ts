@@ -24,9 +24,11 @@ export interface BrandingConfig {
 export const DEFAULT_BRANDING: BrandingConfig = {
   logo_url: '',
   favicon_url: '',
-  name_part1: 'Web',
+  // "E" + "PM" rather than "EPM" + "": the second part is the one that takes
+  // the theme accent colour, so a brand with nothing in part 2 renders flat.
+  name_part1: 'E',
   name_part1_color: '',
-  name_part2: 'Xterm',
+  name_part2: 'PM',
   name_part2_color: '',
   default_theme_color: 'cyan',
   default_theme_color_updated_at: '',

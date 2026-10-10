@@ -42,13 +42,19 @@
 
     --radius: 0.75rem;
 
-    --sidebar-background: var(--background);
-    --sidebar-foreground: 222 47% 11%;
+    /* The navigation rail is dark in BOTH colour modes, deliberately. It is
+       chrome, not content: keeping it fixed gives the product one silhouette
+       that a user recognises before reading anything, and stops the accent
+       colour — which the nav leans on to show what is selected — from having
+       to work against two very different backgrounds. The content area still
+       follows light/dark as normal. */
+    --sidebar-background: 222 47% 9%;
+    --sidebar-foreground: 210 40% 96%;
     --sidebar-primary: var(--primary);
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 40% 96%;
-    --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: var(--border);
+    --sidebar-accent: 222 40% 16%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 222 35% 18%;
     --sidebar-ring: var(--ring);
 
     --terminal-bg: 220 13% 18%;
@@ -103,13 +109,13 @@
     --input: 220 13% 25%;
     --ring: 173 80% 45%;
 
-    --sidebar-background: var(--background);
+    --sidebar-background: 222 47% 7%;
     --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: var(--primary);
     --sidebar-primary-foreground: 220 13% 10%;
-    --sidebar-accent: 220 13% 20%;
+    --sidebar-accent: 222 40% 15%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: var(--border);
+    --sidebar-border: 222 35% 15%;
     --sidebar-ring: var(--ring);
 
     --terminal-bg: 220 13% 8%;

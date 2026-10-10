@@ -10,7 +10,6 @@ import {
   Users,
   Package,
   Boxes,
-  Settings,
   ClipboardList,
   ShieldCheck,
   SlidersHorizontal,
@@ -71,19 +70,44 @@ const Community_URL = process.env.NEXT_PUBLIC_COMUNITY_URL;
 const Documentation_URL = process.env.NEXT_PUBLIC_DOCUMENTATION_URL;
 const appVersion = process.env.NEXT_PUBLIC_APP_VERSION;
 
-// Primary workspace navigation.
-const mainNavItems: NavItem[] = [
-  { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { title: 'Machines', href: '/machines', icon: Monitor },
-  // EPM: Access Requests disabled — re-enable later
-  // { title: 'Access Requests', href: '/access-requests', icon: ShieldCheck, roles: ['super_admin', 'company_admin'] },
-  { title: 'Applications', href: '/applications', icon: Boxes, roles: ['super_admin', 'company_admin'] },
-  { title: 'Policies', href: '/policies', icon: ShieldCheck, roles: ['super_admin', 'company_admin'] },
-  { title: 'Packages', href: '/packages', icon: Package },
-  { title: 'Organisation Management', href: '/user-management', icon: Settings, roles: ['super_admin', 'company_admin'] },
-  { title: 'Audit & Reporting', href: '/audit-logs', icon: ClipboardList, roles: ['super_admin', 'company_admin'] },
-  { title: 'Settings', href: '/settings', icon: SlidersHorizontal, roles: ['super_admin', 'company_admin'] },
-  { title: 'Metrics', href: '/metrics', icon: BarChart2, roles: ['super_admin'] },
+interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+// Primary workspace navigation, grouped by what the user came to do rather
+// than as one flat list. Twelve unlabelled entries read as a wall; three short
+// named groups give somebody who has never used the product a place to start.
+//
+// Order matters: ACCESS is who and what, PLATFORM is the fleet and the rules
+// applied to it, OPERATIONS is what happened afterwards.
+const navSections: NavSection[] = [
+  {
+    label: 'Access',
+    items: [
+      { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { title: 'Organisation', href: '/user-management', icon: Users, roles: ['super_admin', 'company_admin'] },
+      // EPM: Access Requests disabled — re-enable later
+      // { title: 'Access Requests', href: '/access-requests', icon: ShieldCheck, roles: ['super_admin', 'company_admin'] },
+    ],
+  },
+  {
+    label: 'Platform',
+    items: [
+      { title: 'Machines', href: '/machines', icon: Monitor },
+      { title: 'Applications', href: '/applications', icon: Boxes, roles: ['super_admin', 'company_admin'] },
+      { title: 'Policies', href: '/policies', icon: ShieldCheck, roles: ['super_admin', 'company_admin'] },
+      { title: 'Packages', href: '/packages', icon: Package },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { title: 'Audit & Reporting', href: '/audit-logs', icon: ClipboardList, roles: ['super_admin', 'company_admin'] },
+      { title: 'Metrics', href: '/metrics', icon: BarChart2, roles: ['super_admin'] },
+      { title: 'Settings', href: '/settings', icon: SlidersHorizontal, roles: ['super_admin', 'company_admin'] },
+    ],
+  },
 ];
 
 // External resources — pinned above the profile section, out of the way of the workspace nav.
@@ -110,9 +134,13 @@ export function AppSidebar() {
   const [switchingTenant, setSwitchingTenant] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const visibleMainItems = useMemo(() => {
-    if (!user) return mainNavItems.filter((item) => !item.roles);
-    return mainNavItems.filter((item) => !item.roles || item.roles.includes(user.role));
+  // A section whose every entry is hidden by role is dropped entirely — a
+  // heading with nothing under it reads as a loading failure.
+  const visibleSections = useMemo(() => {
+    const allowed = (item: NavItem) => !item.roles || (user ? item.roles.includes(user.role) : false);
+    return navSections
+      .map((section) => ({ ...section, items: section.items.filter(allowed) }))
+      .filter((section) => section.items.length > 0);
   }, [user]);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
@@ -225,29 +253,35 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Platform</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {visibleMainItems.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.href)}
-                    tooltip={item.title}
-                    className="data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:hover:bg-primary/15 data-[active=true]:hover:text-primary"
-                  >
-                    <Link href={item.href}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
+        {visibleSections.map((section) => (
+          <SidebarGroup key={section.label}>
+            <SidebarGroupLabel className="text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/40">
+              {section.label}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {section.items.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive(item.href)}
+                      tooltip={item.title}
+                      // The selected entry gets a left rule as well as a tint.
+                      // Colour alone carries it for most people and for nobody
+                      // who cannot separate the accent from the background.
+                      className="relative text-sidebar-foreground/70 hover:text-sidebar-foreground data-[active=true]:bg-primary/15 data-[active=true]:font-medium data-[active=true]:text-primary data-[active=true]:hover:bg-primary/20 data-[active=true]:hover:text-primary data-[active=true]:before:absolute data-[active=true]:before:left-0 data-[active=true]:before:top-1.5 data-[active=true]:before:bottom-1.5 data-[active=true]:before:w-0.5 data-[active=true]:before:rounded-full data-[active=true]:before:bg-primary"
+                    >
+                      <Link href={item.href}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
 
       <SidebarFooter>
@@ -360,12 +394,15 @@ export function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
 
-        {appVersion && (
-          <>
-            <SidebarSeparator className="my-1" />
-            <p className="px-2 text-center text-[11px] text-sidebar-foreground/40">v{appVersion}</p>
-          </>
-        )}
+        {/* What the product IS, spelled out once. "EPM" is an acronym the
+            people being governed by it have usually never met, and the
+            sidebar is the one place it can sit permanently without taking
+            room from anything. */}
+        <SidebarSeparator className="my-1" />
+        <p className="px-2 text-center text-[11px] leading-relaxed text-sidebar-foreground/40">
+          Endpoint Privilege Management
+          {appVersion && <span className="text-sidebar-foreground/30"> · v{appVersion}</span>}
+        </p>
       </SidebarFooter>
     </Sidebar>
   );

@@ -46,9 +46,15 @@ export default function DashboardLayout({
     <BreadcrumbProvider>
       <SidebarProvider>
         <AppSidebar />
-        <SidebarInset>
-          <Header />
-          <main className="p-4 lg:p-6">{children}</main>
+        {/* The content sits on its own rounded panel against the dark rail,
+            the way the rest of the product's chrome is shaped. The gap is on
+            the left only — top, right and bottom run to the window edge so
+            long tables are not squeezed for the sake of symmetry. */}
+        <SidebarInset className="bg-sidebar">
+          <div className="flex min-h-svh flex-1 flex-col overflow-hidden rounded-l-2xl bg-background">
+            <Header />
+            <main className="flex-1 p-4 lg:p-6">{children}</main>
+          </div>
         </SidebarInset>
       </SidebarProvider>
     </BreadcrumbProvider>

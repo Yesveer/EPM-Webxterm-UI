@@ -1,6 +1,6 @@
 'use client';
 
-import { Terminal } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { useBranding } from '@/contexts/BrandingContext';
 import { cn } from '@/lib/utils';
 
@@ -14,7 +14,7 @@ interface BrandMarkProps {
 
 // Renders the product mark (logo + name) from the org's branding config, set by a
 // super admin in Settings → Theme Configuration. Falls back to the default
-// WebXterm terminal icon + name when nothing has been customized yet.
+// EPM shield icon + name when nothing has been customized yet.
 export function BrandMark({
   iconBoxClassName = 'w-10 h-10 rounded-xl bg-primary text-primary-foreground',
   iconClassName = 'w-6 h-6',
@@ -27,7 +27,7 @@ export function BrandMark({
   textClassName = 'text-2xl font-bold tracking-tight',
   textWrapperClassName,
 }: BrandMarkProps) {
-  const { branding } = useBranding();
+  const { branding, resolved } = useBranding();
 
   const icon = branding.logo_url ? (
     <img
@@ -37,14 +37,20 @@ export function BrandMark({
     />
   ) : (
     <div className={cn('flex items-center justify-center shrink-0', iconBoxClassName)}>
-      <Terminal className={iconClassName} />
+      <ShieldCheck className={iconClassName} />
     </div>
   );
 
   // Neither part takes a custom colour: Part 1 inherits the surrounding text
   // colour, Part 2 always tracks the active theme accent colour.
+  //
+  // Until the real config has resolved, the name renders transparent rather
+  // than not at all. The stock name is the WRONG name on any deployment that
+  // renamed the product, and showing it for one frame before correcting it is
+  // what produced the visible flicker on the login page; collapsing the
+  // element instead would just trade that flicker for a layout jump.
   const name = (
-    <span className={cn(textClassName, 'truncate')}>
+    <span className={cn(textClassName, 'truncate', !resolved && 'invisible')} aria-hidden={!resolved}>
       <span>{branding.name_part1}</span>
       <span className="text-primary">{branding.name_part2}</span>
     </span>
@@ -55,5 +61,21 @@ export function BrandMark({
       {icon}
       {textWrapperClassName ? <div className={textWrapperClassName}>{name}</div> : name}
     </>
+  );
+}
+
+/** The product name as inline text, for prose like "Sign in to your X account".
+ *
+ *  Same rule as BrandMark: nothing is shown until the real config has
+ *  resolved, so a renamed deployment never flashes the stock name first. The
+ *  placeholder keeps the line's height so the sentence does not jump. */
+export function BrandName({ className }: { className?: string }) {
+  const { branding, resolved } = useBranding();
+  if (!resolved) return <span className={cn('inline-block', className)}>&nbsp;</span>;
+  return (
+    <span className={className}>
+      {branding.name_part1}
+      {branding.name_part2}
+    </span>
   );
 }
