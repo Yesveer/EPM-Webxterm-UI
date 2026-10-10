@@ -84,6 +84,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useToast } from '@/hooks/use-toast';
 
 // ── Archive status badge ──────────────────────────────────────────────────────
@@ -597,9 +598,16 @@ export default function SettingsPage() {
     }
   };
 
-  const handleCopyGeneratedKey = () => {
+  const handleCopyGeneratedKey = async () => {
     if (!justGeneratedKey) return;
-    navigator.clipboard.writeText(justGeneratedKey.fullValue);
+    if (!(await copyToClipboard(justGeneratedKey.fullValue))) {
+      toast({
+        title: 'Could not copy',
+        description: 'Your browser blocked clipboard access — select the text and copy it manually.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setCopiedGeneratedKey(true);
     toast({ title: 'Copied!' });
   };

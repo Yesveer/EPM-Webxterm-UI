@@ -30,6 +30,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useToast } from '@/hooks/use-toast';
 import { deploymentsAPI, Deployment, DeploymentStatus } from '@/lib/deployments-api';
 import { cn } from '@/lib/utils';
@@ -117,8 +118,15 @@ export default function DeploymentDetailPage() {
     return () => clearInterval(t);
   }, [dep?.status]);
 
-  const copy = (text: string, label = 'Copied!') => {
-    navigator.clipboard.writeText(text);
+  const copy = async (text: string, label = 'Copied!') => {
+    if (!(await copyToClipboard(text))) {
+      toast({
+        title: 'Could not copy',
+        description: 'Your browser blocked clipboard access — select the text and copy it manually.',
+        variant: 'destructive',
+      });
+      return;
+    }
     toast({ title: label });
   };
 

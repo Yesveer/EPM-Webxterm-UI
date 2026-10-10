@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useToast } from '@/hooks/use-toast';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8082';
@@ -271,8 +272,15 @@ export default function PackagesPage() {
       : `curl -L -o ${filename} ${url}`;
   };
 
-  const handleCopyCurl = (id: string, downloadUrl: string, filename: string) => {
-    navigator.clipboard.writeText(getDownloadCommand(downloadUrl, filename));
+  const handleCopyCurl = async (id: string, downloadUrl: string, filename: string) => {
+    if (!(await copyToClipboard(getDownloadCommand(downloadUrl, filename)))) {
+        toast({
+          title: "Could not copy",
+          description: "Your browser blocked clipboard access — select the text and copy it manually.",
+          variant: "destructive",
+        });
+        return;
+    }
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
     toast({

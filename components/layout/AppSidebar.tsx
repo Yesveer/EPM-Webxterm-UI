@@ -87,9 +87,12 @@ const mainNavItems: NavItem[] = [
 ];
 
 // External resources — pinned above the profile section, out of the way of the workspace nav.
+//
+// EPM: Documentation and Support hidden from the sidebar. Commented rather
+// than deleted, like Access Requests above, so re-enabling is one line.
 const resourceNavItems: NavItem[] = [
-  { title: 'Documentation', href: Documentation_URL ?? '#', icon: BookOpen, target: '_blank' },
-  { title: 'Support', href: Community_URL ?? '#', icon: Users, target: '_blank' },
+  // { title: 'Documentation', href: Documentation_URL ?? '#', icon: BookOpen, target: '_blank' },
+  // { title: 'Support', href: Community_URL ?? '#', icon: Users, target: '_blank' },
 ];
 
 const themeColors = [
@@ -248,24 +251,29 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter>
-        {/* Resources — pinned above the profile section, at the very bottom of the nav */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Resources</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {resourceNavItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild tooltip={item.title}>
-                    <a href={item.href} target={item.target} rel="noopener noreferrer">
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Resources — pinned above the profile section, at the very bottom of
+            the nav. The whole group is hidden when there is nothing in it,
+            rather than leaving a heading with no items under it. Re-enabling
+            an entry brings the heading back on its own. */}
+        {resourceNavItems.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Resources</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {resourceNavItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild tooltip={item.title}>
+                      <a href={item.href} target={item.target} rel="noopener noreferrer">
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         <SidebarSeparator className="mb-1" />
         {/* Profile */}

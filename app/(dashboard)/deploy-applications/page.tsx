@@ -27,6 +27,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/contexts/AuthContext';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useToast } from '@/hooks/use-toast';
 import { deploymentsAPI, Deployment, DeploymentStatus } from '@/lib/deployments-api';
 import { cn } from '@/lib/utils';
@@ -97,8 +98,15 @@ export default function DeployApplicationsPage() {
     }
   };
 
-  const copyURL = (url: string) => {
-    navigator.clipboard.writeText(url);
+  const copyURL = async (url: string) => {
+    if (!(await copyToClipboard(url))) {
+      toast({
+        title: 'Could not copy',
+        description: 'Your browser blocked clipboard access — select the text and copy it manually.',
+        variant: 'destructive',
+      });
+      return;
+    }
     toast({ title: 'URL copied!' });
   };
 

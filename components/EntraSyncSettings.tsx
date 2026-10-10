@@ -13,7 +13,11 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { SelectInput } from '@/components/FilterBar';
 import { useToast } from '@/components/ui/use-toast';
-import { entraSyncAPI, EntraSyncSettings as Settings } from '@/lib/entra-sync-api';
+import {
+  entraSyncAPI,
+  EntraSyncSettings as Settings,
+  EntraSyncRunResult,
+} from '@/lib/entra-sync-api';
 
 interface Props {
   token: string | null;
@@ -110,11 +114,10 @@ export default function EntraSyncSettings({ token }: Props) {
       const res = await entraSyncAPI.runNow(token);
       toast({
         title: res.status === 'success' ? 'Sync finished' : `Sync ${res.status}`,
-        description:
-          `${res.users_created} created, ${res.users_updated} updated, ` +
-          `${res.users_disabled} disabled, ${res.groups_created + res.groups_updated} groups` +
-          (res.error ? ` — ${res.error}` : ''),
-        variant: res.status === 'failed' ? 'destructive' : undefined,
+        description: describeRun(res),
+        // A run where every account failed is not a success, whatever the
+        // status says — the operator should see that in the colour too.
+        variant: res.status === 'failed' || res.users_failed > 0 ? 'destructive' : undefined,
       });
       load();
     } catch (err) {
@@ -353,13 +356,18 @@ export default function EntraSyncSettings({ token }: Props) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
+              <Stat label="Read from Entra" value={settings.last_users_seen} />
               <Stat label="Created" value={settings.last_users_created} />
               <Stat label="Updated" value={settings.last_users_updated} />
               <Stat label="Disabled" value={settings.last_users_disabled} />
               <Stat label="Groups added" value={settings.last_groups_created} />
               <Stat label="Groups updated" value={settings.last_groups_updated} />
             </div>
+
+            {/* Why the user figures above are what they are. Without this a
+                row of zeros is indistinguishable from a broken run. */}
+            <UserOutcome settings={settings} />
             {settings.last_error && (
               <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs">
                 {settings.last_error}
@@ -379,4 +387,96 @@ function Stat({ label, value }: { label: string; value: number }) {
       <p className="mt-0.5 text-xl font-semibold">{value}</p>
     </div>
   );
+}
+
+/** One line saying what a manual run actually did.
+ *
+ *  The old version listed only successes, so a run where every account failed
+ *  to provision read identically to a run with nothing to do. */
+function describeRun(res: EntraSyncRunResult): string {
+  if (res.users_sync_off) {
+    return `User synchronisation is switched off. ${res.groups_created + res.groups_updated} group(s) synced.`;
+  }
+
+  const parts = [`${res.users_seen} read from Entra`];
+  if (res.users_created) parts.push(`${res.users_created} created`);
+  if (res.users_updated) parts.push(`${res.users_updated} updated`);
+  if (res.users_disabled) parts.push(`${res.users_disabled} disabled`);
+  if (res.users_skipped) parts.push(`${res.users_skipped} skipped (no address)`);
+  if (res.users_failed) parts.push(`${res.users_failed} FAILED`);
+  parts.push(`${res.groups_created + res.groups_updated} group(s)`);
+
+  let line = parts.join(', ');
+  if (res.user_error) line += ` — ${res.user_error}`;
+  if (res.error) line += ` — ${res.error}`;
+  return line;
+}
+
+/** Explains the user figures on the last-sync card.
+ *
+ *  A row of zeros is the same picture whether the toggle is off, the directory
+ *  is empty, every account was skipped, or every account failed. Saying which
+ *  is the difference between a number and an answer. */
+function UserOutcome({ settings }: { settings: Settings }) {
+  if (settings.last_users_sync_off) {
+    return (
+      <p className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
+        User synchronisation is switched off, so the user figures above are a setting rather than a
+        result. Turn on <span className="font-medium text-foreground">Synchronise users</span> to
+        provision accounts.
+      </p>
+    );
+  }
+
+  if (settings.last_users_failed > 0) {
+    return (
+      <div className="flex items-start gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs">
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+        <div>
+          <p className="font-medium">
+            {settings.last_users_failed} of {settings.last_users_seen} accounts could not be
+            provisioned.
+          </p>
+          {settings.last_user_error && (
+            <p className="mt-1 font-mono text-muted-foreground">{settings.last_user_error}</p>
+          )}
+          <p className="mt-1 text-muted-foreground">
+            Accounts are created in Keycloak first, so this is usually Keycloak being unreachable or
+            a username already taken by another realm.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (settings.last_users_seen === 0) {
+    return (
+      <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-muted-foreground">
+        The directory returned no users. Groups synced, so the credentials and connection are fine —
+        this is usually the app registration missing the{' '}
+        <span className="font-mono">User.Read.All</span> application permission, or missing admin
+        consent for it.
+      </p>
+    );
+  }
+
+  if (settings.last_users_skipped === settings.last_users_seen) {
+    return (
+      <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-muted-foreground">
+        All {settings.last_users_seen} directory accounts were skipped because none has a mail
+        address or userPrincipalName. There is nothing to match a local account by, and nothing to
+        sign in with.
+      </p>
+    );
+  }
+
+  if (settings.last_users_created + settings.last_users_updated === 0) {
+    return (
+      <p className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
+        All {settings.last_users_seen} accounts were already in sync — nothing needed changing.
+      </p>
+    );
+  }
+
+  return null;
 }

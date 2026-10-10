@@ -26,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { machinesAPI } from '@/lib/machines-api';
@@ -208,9 +209,21 @@ const [selectedOS, setSelectedOS] = useState('');
     });
   };
 
-  const handleCopyDownloadCommand = () => {
+  const handleCopyDownloadCommand = async () => {
     if (!downloadCommand) return;
-    navigator.clipboard.writeText(downloadCommand);
+
+    // The tick and the toast wait on the result. Showing "Copied!" before
+    // knowing whether it worked is how somebody ends up pasting the previous
+    // contents of their clipboard into a root shell.
+    if (!(await copyToClipboard(downloadCommand))) {
+      toast({
+        title: "Could not copy",
+        description: "Your browser blocked clipboard access — select the command and copy it manually.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setDownloadCmdCopied(true);
     toast({
       title: "Copied!",
@@ -221,8 +234,16 @@ const [selectedOS, setSelectedOS] = useState('');
     setTimeout(() => setDownloadCmdCopied(false), 2000);
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(activeConfigCommand);
+  const handleCopy = async () => {
+    if (!(await copyToClipboard(activeConfigCommand))) {
+      toast({
+        title: "Could not copy",
+        description: "Your browser blocked clipboard access — select the command and copy it manually.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setCopied(true);
     toast({ title: "Copied!", description: "Command copied to clipboard" });
     setTimeout(() => setCopied(false), 2000);

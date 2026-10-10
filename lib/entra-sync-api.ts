@@ -27,6 +27,15 @@ export interface EntraSyncSettings {
   last_users_disabled: number;
   last_groups_created: number;
   last_groups_updated: number;
+
+  /** What the run attempted, not just what it achieved. Four zeros mean five
+   *  different things without these — a switched-off toggle, an empty
+   *  directory, everyone skipped, everyone failed, or nothing to do. */
+  last_users_seen: number;
+  last_users_skipped: number;
+  last_users_failed: number;
+  last_user_error?: string;
+  last_users_sync_off: boolean;
 }
 
 export interface EntraSyncSavePayload {
@@ -50,6 +59,12 @@ export interface EntraSyncRunResult {
   users_disabled: number;
   groups_created: number;
   groups_updated: number;
+
+  users_seen: number;
+  users_skipped: number;
+  users_failed: number;
+  user_error?: string;
+  users_sync_off: boolean;
 }
 
 export const entraSyncAPI = {

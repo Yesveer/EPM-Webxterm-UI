@@ -286,11 +286,18 @@ export const groupsAPI = {
 // ========== Users API ==========
 
 export const usersAPI = {
-  async listUsers(token: string, tenantId?: string, opts: { page?: number; limit?: number } = {}): Promise<{ users: User[]; total: number; page: number; limit: number; total_pages: number }> {
+  async listUsers(
+    token: string,
+    tenantId?: string,
+    opts: { page?: number; limit?: number; search?: string } = {},
+  ): Promise<{ users: User[]; total: number; page: number; limit: number; total_pages: number }> {
     const params = new URLSearchParams();
     if (tenantId && tenantId.trim() !== '') params.set('tenant_id', tenantId);
     if (opts.page !== undefined) params.set('page', String(opts.page));
     if (opts.limit !== undefined) params.set('limit', String(opts.limit));
+    // Sent to the server, not applied in the browser: the page only holds one
+    // page of users, so filtering here finds nobody who is on page three.
+    if (opts.search?.trim()) params.set('search', opts.search.trim());
     const qs = params.toString();
     return apiRequest<{ users: User[]; total: number; page: number; limit: number; total_pages: number }>(`/users${qs ? `?${qs}` : ''}`, {
       method: 'GET',
@@ -329,7 +336,10 @@ export const usersAPI = {
   },
 
   async assignRoles(token: string, userId: string, roles: AssignUserRolesRequest): Promise<User> {
-    return apiRequest<User>(`/roles/users/${userId}/roles`, {
+    // POST /api/users/:id/roles — the handler is registered on the users
+    // group, not under /roles. The old path had an extra prefix and simply
+    // 404ed, so assigning a role silently did nothing.
+    return apiRequest<User>(`/users/${userId}/roles`, {
       method: 'POST',
       body: JSON.stringify(roles),
       token,
@@ -369,7 +379,8 @@ export const rolesAPI = {
   },
 
   async getUserRoles(token: string, userId: string): Promise<{ portal_role: RoleDefinition; machine_role: RoleDefinition }> {
-    return apiRequest<{ portal_role: RoleDefinition; machine_role: RoleDefinition }>(`/roles/users/${userId}`, {
+    // GET /api/users/:id/roles — same correction as assignRoles above.
+    return apiRequest<{ portal_role: RoleDefinition; machine_role: RoleDefinition }>(`/users/${userId}/roles`, {
       method: 'GET',
       token,
     });

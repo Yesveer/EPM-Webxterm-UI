@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useToast } from '@/hooks/use-toast';
 import { profileAPI, ProfileData } from '@/lib/profile-api';
 import { communityAPI } from '@/lib/community-api';
@@ -127,9 +128,16 @@ export default function Profile() {
     }
   };
 
-  const handleCopyAPIKey = () => {
+  const handleCopyAPIKey = async () => {
     if (profileData?.api_key) {
-      navigator.clipboard.writeText(profileData.api_key);
+      if (!(await copyToClipboard(profileData.api_key))) {
+        toast({
+          title: "Could not copy",
+          description: "Your browser blocked clipboard access — select the text and copy it manually.",
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
         title: "Copied!",
         description: "API key copied to clipboard",

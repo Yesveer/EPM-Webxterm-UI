@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Breadcrumb } from '@/components/ui/page-breadcrumb';
+import { PaginationBar } from '@/components/ui/pagination-bar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -208,7 +209,14 @@ export default function UserManagementPage() {
         return;
       }
 
-      const data = await usersAPI.listUsers(token, tenantId, { page, limit: PAGE_SIZE });
+      const data = await usersAPI.listUsers(token, tenantId, {
+        page,
+        limit: PAGE_SIZE,
+        // Searched server-side. Filtering the fetched page in the browser only
+        // ever searched the ten users already on screen, so anybody on a later
+        // page was unfindable.
+        search: userSearch,
+      });
       setUsers(data.users || []);
       setUsersTotal(data.total ?? 0);
       setUsersTotalPages(data.total_pages ?? 1);
@@ -258,10 +266,15 @@ export default function UserManagementPage() {
   }, [activeTab, token]);
 
   useEffect(() => {
-    if (activeTab === 'users') {
-      fetchUsers();
-    }
-  }, [activeTab, token]);
+    if (activeTab !== 'users') return;
+
+    // Debounced so typing does not fire a request per keystroke, and reset to
+    // page 1 — staying on page 4 of a narrower result set shows an empty
+    // table for no visible reason.
+    const t = setTimeout(() => fetchUsers(1), userSearch ? 300 : 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, token, userSearch]);
 
   useEffect(() => {
     if (activeTab === 'roles') {
@@ -432,7 +445,9 @@ export default function UserManagementPage() {
       setAssignRoleDialog(null);
       setSelectedPortalRole('');
       setSelectedMachineRole('');
-      fetchUsers();
+      // Reload the page the admin is actually on; jumping back to page 1
+      // after every role change loses their place in a long list.
+      fetchUsers(usersPage);
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -476,11 +491,9 @@ export default function UserManagementPage() {
     group.description?.toLowerCase().includes(groupSearch.toLowerCase())
   );
 
-  const filteredUsers = users.filter(user =>
-    user.username.toLowerCase().includes(userSearch.toLowerCase()) ||
-    user.email.toLowerCase().includes(userSearch.toLowerCase()) ||
-    `${user.first_name} ${user.last_name}`.toLowerCase().includes(userSearch.toLowerCase())
-  );
+  // No client-side filtering: the server returned exactly the matches for the
+  // current search, across the whole tenant rather than the current page.
+  const filteredUsers = users;
 
   return (
     <div className="animate-fade-in">
@@ -909,21 +922,15 @@ export default function UserManagementPage() {
                     )}
                   </TableBody>
                 </Table>
-                {usersTotalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4">
-                    <p className="text-sm text-muted-foreground">
-                      Page {usersPage} of {usersTotalPages} ({usersTotal} total)
-                    </p>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => fetchUsers(usersPage - 1)} disabled={usersPage === 1}>
-                        <ChevronLeft className="w-4 h-4" />Previous
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => fetchUsers(usersPage + 1)} disabled={usersPage === usersTotalPages}>
-                        Next<ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                <div className="mt-4">
+                  <PaginationBar
+                    page={usersPage}
+                    totalPages={usersTotalPages}
+                    total={usersTotal}
+                    onPageChange={fetchUsers}
+                    label="users"
+                  />
+                </div>
                 </>
               )}
             </CardContent>
@@ -1225,18 +1232,10 @@ export default function UserManagementPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Machine Role</Label>
-                <Select value={newUser.machine_role} onValueChange={(val) => setNewUser({ ...newUser, machine_role: val })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select machine role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="non_sudo">Non Sudo</SelectItem>
-                    <SelectItem value="allow_sudo">Allow Sudo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Machine Role is hidden from the form but still sent: the
+                  backend and the API contract keep it, and newUser already
+                  carries the "non_sudo" default. Dropping it from the payload
+                  would change behaviour rather than just the UI. */}
             </div>
           </div>
           <DialogFooter>
@@ -1274,18 +1273,10 @@ export default function UserManagementPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Machine Role</Label>
-              <Select value={selectedMachineRole} onValueChange={setSelectedMachineRole}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select machine role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="allow_sudo">Allow Sudo</SelectItem>
-                  <SelectItem value="non_sudo">Non Sudo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Machine Role is hidden here too. selectedMachineRole is still
+                populated from the user's current value when the dialog opens,
+                so assigning a portal role leaves it untouched rather than
+                silently resetting it. */}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignRoleDialog(null)}>

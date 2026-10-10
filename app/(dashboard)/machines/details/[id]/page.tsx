@@ -94,6 +94,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import MachineApplications from '@/components/MachineApplications';
+import { copyToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBranding } from '@/contexts/BrandingContext';
@@ -1164,8 +1165,16 @@ export default function MachineDetails() {
   --host "YOUR_SERVER_URL" --allow-sudo`}
                   </pre>
                   <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(`sudo wxt-agent configure --token "${machine.registration_token}" --host "YOUR_SERVER_URL" --allow-sudo`);
+                    onClick={async () => {
+                      const command = `sudo wxt-agent configure --token "${machine.registration_token}" --host "YOUR_SERVER_URL" --allow-sudo`;
+                      if (!(await copyToClipboard(command))) {
+                        toast({
+                          title: "Could not copy",
+                          description: "Your browser blocked clipboard access — select the command and copy it manually.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
                       toast({
                         title: "Copied",
                         description: "Command copied to clipboard",
