@@ -176,7 +176,14 @@ export default function UserManagementPage() {
     if (!token) return;
     setGroupsLoading(true);
     try {
-      const data = await groupsAPI.listGroups(token, { page, limit: PAGE_SIZE });
+      const data = await groupsAPI.listGroups(token, {
+        page,
+        limit: PAGE_SIZE,
+        // Searched server-side. Filtering the fetched page in the browser only
+        // ever searched the ten groups already on screen, so anything on a
+        // later page was unfindable.
+        search: groupSearch,
+      });
       setGroups(data.groups || []);
       setGroupsTotal(data.total ?? 0);
       setGroupsTotalPages(data.total_pages ?? 1);
@@ -260,10 +267,15 @@ export default function UserManagementPage() {
   }, [activeTab, isSuperAdmin, token]);
 
   useEffect(() => {
-    if (activeTab === 'groups') {
-      fetchGroups();
-    }
-  }, [activeTab, token]);
+    if (activeTab !== 'groups') return;
+
+    // Debounced so typing does not fire a request per keystroke, and reset to
+    // page 1 — staying on page 4 of a narrower result set shows an empty
+    // table for no visible reason.
+    const t = setTimeout(() => fetchGroups(1), groupSearch ? 300 : 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, token, groupSearch]);
 
   useEffect(() => {
     if (activeTab !== 'users') return;
@@ -486,10 +498,9 @@ export default function UserManagementPage() {
     org.display_name.toLowerCase().includes(orgSearch.toLowerCase())
   );
 
-  const filteredGroups = groups.filter(group =>
-    group.name.toLowerCase().includes(groupSearch.toLowerCase()) ||
-    group.description?.toLowerCase().includes(groupSearch.toLowerCase())
-  );
+  // No client-side filtering: the server returned exactly the matches for the
+  // current search, across the whole tenant rather than the current page.
+  const filteredGroups = groups;
 
   // No client-side filtering: the server returned exactly the matches for the
   // current search, across the whole tenant rather than the current page.
@@ -779,21 +790,15 @@ export default function UserManagementPage() {
                     )}
                   </TableBody>
                 </Table>
-                {groupsTotalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4">
-                    <p className="text-sm text-muted-foreground">
-                      Page {groupsPage} of {groupsTotalPages} ({groupsTotal} total)
-                    </p>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => fetchGroups(groupsPage - 1)} disabled={groupsPage === 1}>
-                        <ChevronLeft className="w-4 h-4" />Previous
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => fetchGroups(groupsPage + 1)} disabled={groupsPage === groupsTotalPages}>
-                        Next<ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                <div className="mt-4">
+                  <PaginationBar
+                    page={groupsPage}
+                    totalPages={groupsTotalPages}
+                    total={groupsTotal}
+                    onPageChange={fetchGroups}
+                    label="groups"
+                  />
+                </div>
                 </>
               )}
             </CardContent>

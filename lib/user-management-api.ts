@@ -188,10 +188,13 @@ export const organizationsAPI = {
 // ========== Groups API ==========
 
 export const groupsAPI = {
-  async listGroups(token: string, opts: { page?: number; limit?: number } = {}): Promise<{ groups: Group[]; total: number; page: number; limit: number; total_pages: number }> {
+  async listGroups(token: string, opts: { page?: number; limit?: number; search?: string } = {}): Promise<{ groups: Group[]; total: number; page: number; limit: number; total_pages: number }> {
     const params = new URLSearchParams();
     if (opts.page !== undefined) params.set('page', String(opts.page));
     if (opts.limit !== undefined) params.set('limit', String(opts.limit));
+    // Sent to the server, not applied in the browser: the page only holds one
+    // page of groups, so filtering here finds nothing on page three.
+    if (opts.search?.trim()) params.set('search', opts.search.trim());
     const qs = params.toString();
     return apiRequest<{ groups: Group[]; total: number; page: number; limit: number; total_pages: number }>(`/groups${qs ? `?${qs}` : ''}`, {
       method: 'GET',
